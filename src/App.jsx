@@ -3,6 +3,7 @@ import {
   teamMembers, closePeriod, closeChecklist, phaseConfig,
   reconciliations, journalEntries, trialBalance, fluxData, activityLog
 } from './data/mockData';
+import TdsRecon from './TdsRecon';
 import './index.css';
 import lekhaLogo from '/lekha-logo.svg';
 
@@ -58,6 +59,7 @@ const priorityColor = (p) => {
 // ─── Main App ─────────────────────────────────────────────
 export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
+  const [tdsReconActive, setTdsReconActive] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedRecon, setSelectedRecon] = useState(null);
   const [selectedJE, setSelectedJE] = useState(null);
@@ -129,7 +131,7 @@ export default function App() {
     setSelectedJE(null);
   };
 
-  const hasDetail = selectedTask || selectedRecon || selectedJE;
+  const hasDetail = !tdsReconActive && (selectedTask || selectedRecon || selectedJE);
 
   // ─── Navigation Items ────────────────────────────────────
   const navItems = [
@@ -468,8 +470,15 @@ export default function App() {
           </div>
         )}
 
+        {/* ─── TDS RECON VIEW ─── */}
+        {activeView === 'reconciliations' && tdsReconActive && (
+          <div className="view-content" style={{ maxWidth: 'none', height: 'calc(100vh - 20px)' }}>
+            <TdsRecon onBack={() => setTdsReconActive(false)} />
+          </div>
+        )}
+
         {/* ─── RECONCILIATIONS VIEW ─── */}
-        {activeView === 'reconciliations' && (
+        {activeView === 'reconciliations' && !tdsReconActive && (
           <div className="view-content">
             <div className="view-header">
               <h1>Reconciliations</h1>
@@ -485,7 +494,7 @@ export default function App() {
                   <div
                     key={r.id}
                     className={`recon-card ${r.status} ${selectedRecon?.id === r.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedRecon(r)}
+                    onClick={() => r.id === 'r7' ? setTdsReconActive(true) : setSelectedRecon(r)}
                   >
                     <div className="recon-card-header">
                       <span className={`recon-type-badge ${r.type}`}>{r.type.replace('_', ' ')}</span>
