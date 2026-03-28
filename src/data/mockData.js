@@ -291,6 +291,16 @@ export const phaseConfig = {
 // --- RECONCILIATION DATA ---
 export const reconciliations = [
   {
+    id: 'r10', account: 'Sales vs Cash/Payment Gateway', type: 'sales',
+    glBalance: 892450.00, supportingBalance: 879120.00,
+    reconcilingItems: [
+      { desc: 'Invoice missing — 3 transactions', amount: -8450, type: 'unrecorded' },
+      { desc: 'Payment failed — 2 orders', amount: -3280, type: 'timing' },
+      { desc: 'Double payment — 1 order (refund pending)', amount: 1600, type: 'disputed' },
+    ],
+    status: 'in_progress', variance: 13330, owner: 'u4', reviewer: 'u2',
+  },
+  {
     id: 'r1', account: 'HDFC Current A/c (001-234567)', type: 'bank',
     glBalance: 2847562.50, supportingBalance: 2892341.00,
     reconcilingItems: [
