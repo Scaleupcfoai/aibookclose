@@ -4,6 +4,16 @@ import './tds-recon.css';
 const API = 'http://localhost:8000';
 const fmt = (n) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
 
+// Polyfill for browsers lacking Array.prototype.findLastIndex
+if (!Array.prototype.findLastIndex) {
+  Array.prototype.findLastIndex = function (fn) {
+    for (let i = this.length - 1; i >= 0; i--) {
+      if (fn(this[i], i, this)) return i;
+    }
+    return -1;
+  };
+}
+
 // Agent thinking states and post-completion action options
 const AGENT_CONFIG = {
   'Parser Agent': {
@@ -103,12 +113,13 @@ function TdsRecon({ onBack }) {
   // Drip-feed: reveal queued events one by one with delays
   const drainQueue = () => {
     if (drainTimerRef.current) return; // already draining
+    console.log('[TDS] drainQueue started, queue length:', eventQueueRef.current.length);
     const next = () => {
       const item = eventQueueRef.current.shift();
-      if (!item) { drainTimerRef.current = null; return; }
+      if (!item) { drainTimerRef.current = null; console.log('[TDS] drainQueue: queue empty, stopping'); return; }
 
       if (item._pipelineComplete) {
-        // Final event — set results and status
+        console.log('[TDS] drainQueue: pipeline_complete reached. Setting done.');
         setResults(item.results || null);
         setRunCount(prev => prev + 1);
         setStatus('done');
@@ -126,6 +137,7 @@ function TdsRecon({ onBack }) {
         return;
       }
 
+      console.log('[TDS] drainQueue: dripping event:', item.type, item.agent, '| remaining:', eventQueueRef.current.length);
       setVisibleEvents(prev => [...prev, item]);
 
       // Delay depends on event type: agent_start gets longer pause
@@ -259,36 +271,39 @@ function TdsRecon({ onBack }) {
     try {
       const evtSource = new EventSource(streamUrl);
 
+      console.log('[TDS] EventSource opened:', streamUrl);
+
       evtSource.onmessage = (msg) => {
         try {
           const event = JSON.parse(msg.data);
           if (event.type === 'keepalive') return;
+          console.log('[TDS] SSE event:', event.type, event.agent, '| queue size:', eventQueueRef.current.length);
 
           if (event.type === 'pipeline_complete') {
             pipelineReceivedRef.current = true;
             evtSource.close();
-            // Queue the final event so it drains after all agent events
             enqueueEvent({ ...event, _pipelineComplete: true });
             return;
           }
 
-          // Queue event for progressive reveal
           enqueueEvent(event);
         } catch (e) {
-          // Ignore parse errors
+          console.error('[TDS] SSE parse error:', e);
         }
       };
 
-      evtSource.onerror = () => {
+      evtSource.onerror = (e) => {
+        console.warn('[TDS] EventSource onerror fired. pipelineReceived:', pipelineReceivedRef.current, 'readyState:', evtSource.readyState);
         evtSource.close();
-        // Only fallback-fetch if pipeline_complete was never received.
-        // Otherwise the drip-feed queue handles results + status transition.
         if (!pipelineReceivedRef.current) {
+          console.log('[TDS] onerror fallback: fetching /api/results directly');
           fetch(`${API}/api/results`).then(r => r.json()).then(data => {
             setResults(data);
             setRunCount(prev => prev + 1);
             setStatus('done');
           }).catch(() => setStatus('error'));
+        } else {
+          console.log('[TDS] onerror ignored — pipeline_complete already received, drip-feed handling it');
         }
       };
     } catch (err) {
