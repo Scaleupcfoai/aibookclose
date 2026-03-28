@@ -63,6 +63,7 @@ function TdsRecon({ onBack }) {
   const fileInputRef = useRef(null);
   const eventQueueRef = useRef([]);
   const drainTimerRef = useRef(null);
+  const pipelineReceivedRef = useRef(false);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -235,6 +236,7 @@ function TdsRecon({ onBack }) {
     // Clear any pending drip-feed from previous run
     eventQueueRef.current = [];
     if (drainTimerRef.current) { clearTimeout(drainTimerRef.current); drainTimerRef.current = null; }
+    pipelineReceivedRef.current = false;
     addAssistantMsg('Starting reconciliation pipeline. Running 4 agents: Parser \u2192 Matcher \u2192 TDS Checker \u2192 Reporter...');
 
     // If user uploaded files, upload them first
@@ -263,6 +265,7 @@ function TdsRecon({ onBack }) {
           if (event.type === 'keepalive') return;
 
           if (event.type === 'pipeline_complete') {
+            pipelineReceivedRef.current = true;
             evtSource.close();
             // Queue the final event so it drains after all agent events
             enqueueEvent({ ...event, _pipelineComplete: true });
@@ -278,12 +281,15 @@ function TdsRecon({ onBack }) {
 
       evtSource.onerror = () => {
         evtSource.close();
-        // If we haven't received pipeline_complete, fetch results
-        fetch(`${API}/api/results`).then(r => r.json()).then(data => {
-          setResults(data);
-          setRunCount(prev => prev + 1);
-          setStatus('done');
-        }).catch(() => setStatus('error'));
+        // Only fallback-fetch if pipeline_complete was never received.
+        // Otherwise the drip-feed queue handles results + status transition.
+        if (!pipelineReceivedRef.current) {
+          fetch(`${API}/api/results`).then(r => r.json()).then(data => {
+            setResults(data);
+            setRunCount(prev => prev + 1);
+            setStatus('done');
+          }).catch(() => setStatus('error'));
+        }
       };
     } catch (err) {
       setVisibleEvents([{ agent: 'Error', type: 'error', message: `Failed to connect to API: ${err.message}. Make sure api_server.py is running on port 8000.` }]);
