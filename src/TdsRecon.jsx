@@ -69,6 +69,10 @@ function TdsRecon({ onBack }) {
     if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, visibleEvents, agentThinkingIdx]);
 
+  // Keep a ref to visibleEvents so the thinking interval can read latest without restarting
+  const visibleEventsRef = useRef(visibleEvents);
+  useEffect(() => { visibleEventsRef.current = visibleEvents; }, [visibleEvents]);
+
   // Cycle thinking states for the currently active agent
   useEffect(() => {
     if (status !== 'running') {
@@ -77,23 +81,23 @@ function TdsRecon({ onBack }) {
     }
     const interval = setInterval(() => {
       setAgentThinkingIdx(prev => {
+        const events = visibleEventsRef.current;
         const next = { ...prev };
         // Find the active agent (last one without agent_done)
-        for (const e of visibleEvents) {
-          if (e.type === 'agent_start') next._activeAgent = e.agent;
-          if (e.type === 'agent_done' && next._activeAgent === e.agent) next._activeAgent = null;
+        let activeAgent = null;
+        for (const e of events) {
+          if (e.type === 'agent_start') activeAgent = e.agent;
+          if (e.type === 'agent_done' && activeAgent === e.agent) activeAgent = null;
         }
-        const active = next._activeAgent;
-        if (active && AGENT_CONFIG[active]) {
-          const states = AGENT_CONFIG[active].thinkingStates;
-          next[active] = ((prev[active] || 0) + 1) % states.length;
+        if (activeAgent && AGENT_CONFIG[activeAgent]) {
+          const states = AGENT_CONFIG[activeAgent].thinkingStates;
+          next[activeAgent] = ((prev[activeAgent] || 0) + 1) % states.length;
         }
-        delete next._activeAgent;
         return next;
       });
     }, 2500);
     return () => clearInterval(interval);
-  }, [status, visibleEvents]);
+  }, [status]);
 
   // Drip-feed: reveal queued events one by one with delays
   const drainQueue = () => {
@@ -800,7 +804,7 @@ function TdsRecon({ onBack }) {
                 )}
 
                 {/* Render agent blocks after the "Starting pipeline" assistant message */}
-                {mi === chatMessages.findIndex(m => m.content?.includes('Starting reconciliation')) && eventBlocks.length > 0 && (
+                {mi === chatMessages.findLastIndex(m => m.content?.includes('Starting reconciliation')) && eventBlocks.length > 0 && (
                   <div className="tds-chat-agent-blocks">
                     {eventBlocks.map((block, bi) => {
                       const isDone = block.events.some(e => e.type === 'agent_done');
