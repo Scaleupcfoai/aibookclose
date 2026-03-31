@@ -228,9 +228,14 @@ function TdsRecon({ onBack }) {
         }),
       });
 
+      if (!res.ok) {
+        throw new Error(`Chat API returned ${res.status}`);
+      }
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = '';
+      let toolCalls = [];
       let buffer = '';
 
       while (true) {
@@ -246,15 +251,35 @@ function TdsRecon({ onBack }) {
             try {
               const event = JSON.parse(line.slice(6));
               if (event.type === 'chat_token') {
-                accumulated += event.content || '';
-                setChatMessages(prev => {
-                  const updated = [...prev];
-                  const idx = updated.findLastIndex(m => m._streaming);
-                  if (idx >= 0) {
-                    updated[idx] = { role: 'assistant', content: accumulated, _streaming: true };
-                  }
-                  return updated;
-                });
+                const content = event.content || '';
+                // Detect tool call status lines (🔧 *tool_name*...)
+                const toolMatch = content.match(/🔧\s*\*(\w+)\*\.\.\./)
+                if (toolMatch) {
+                  toolCalls.push(toolMatch[1]);
+                  // Show tool call as a subtle status, not as response text
+                  setChatMessages(prev => {
+                    const updated = [...prev];
+                    const idx = updated.findLastIndex(m => m._streaming);
+                    if (idx >= 0) {
+                      const toolStatus = toolCalls.map(t => `\u2022 Querying ${t.replace(/_/g, ' ')}...`).join('\n');
+                      updated[idx] = { role: 'assistant', content: toolStatus, _streaming: true, _isTooling: true };
+                    }
+                    return updated;
+                  });
+                } else if (content.includes('Max tool calls reached')) {
+                  // Ignore — this is an internal limit, not user-facing
+                } else {
+                  // Real response text
+                  accumulated += content;
+                  setChatMessages(prev => {
+                    const updated = [...prev];
+                    const idx = updated.findLastIndex(m => m._streaming);
+                    if (idx >= 0) {
+                      updated[idx] = { role: 'assistant', content: accumulated, _streaming: true };
+                    }
+                    return updated;
+                  });
+                }
               } else if (event.type === 'chat_done') {
                 setChatMessages(prev => {
                   const updated = [...prev];
