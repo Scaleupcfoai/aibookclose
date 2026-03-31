@@ -68,6 +68,8 @@ function TdsRecon({ onBack }) {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [agentThinkingIdx, setAgentThinkingIdx] = useState({});
+  const [pendingQuestion, setPendingQuestion] = useState(null);
+  const [questionAnswer, setQuestionAnswer] = useState({ selected: [], textInput: '' });
   const logRef = useRef(null);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -140,6 +142,11 @@ function TdsRecon({ onBack }) {
       console.log('[TDS] drainQueue: dripping event:', item.type, item.agent, '| remaining:', eventQueueRef.current.length);
       setVisibleEvents(prev => [...prev, item]);
 
+      // If this is a question event, also set it as pending
+      if (item.type === 'question') {
+        setPendingQuestion(item);
+      }
+
       // Delay depends on event type: agent_start gets longer pause
       const delay = item.type === 'agent_start' ? 1200
         : item.type === 'agent_done' ? 800
@@ -164,6 +171,10 @@ function TdsRecon({ onBack }) {
   const handleCommand = (text) => {
     const lower = text.toLowerCase().trim();
 
+    if (lower === 'retry') {
+      runPipeline();
+      return;
+    }
     if (lower.includes('run') || lower.includes('start') || lower.includes('reconcil')) {
       runPipeline();
       return;
@@ -239,12 +250,46 @@ function TdsRecon({ onBack }) {
     }
   };
 
+  // Submit answer to a pending question
+  const submitAnswer = async () => {
+    if (!pendingQuestion || questionAnswer.selected.length === 0) return;
+
+    const answer = {
+      question_id: pendingQuestion.question_id,
+      selected: questionAnswer.selected.filter(s => s !== '_other'),
+      text_input: questionAnswer.selected.includes('_other') ? questionAnswer.textInput : null,
+    };
+
+    // Show user's answer as a chat message
+    const answerText = questionAnswer.selected.includes('_other')
+      ? questionAnswer.textInput
+      : questionAnswer.selected.map(id => pendingQuestion.options?.find(o => o.id === id)?.label || id).join(', ');
+    setChatMessages(prev => [...prev, { role: 'user', content: answerText }]);
+
+    // Mark question as answered
+    setPendingQuestion(prev => prev ? { ...prev, _answered: true } : null);
+    setQuestionAnswer({ selected: [], textInput: '' });
+
+    // POST answer to backend
+    try {
+      await fetch(`${API}/api/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(answer),
+      });
+    } catch (err) {
+      console.error('[TDS] Failed to submit answer:', err);
+    }
+  };
+
   // Upload files then run, or run on existing data
   const runPipeline = async () => {
     setStatus('running');
     setVisibleEvents([]);
     setReviewDecisions({});
     setResults(null);
+    setPendingQuestion(null);
+    setQuestionAnswer({ selected: [], textInput: '' });
     // Clear any pending drip-feed from previous run
     eventQueueRef.current = [];
     if (drainTimerRef.current) { clearTimeout(drainTimerRef.current); drainTimerRef.current = null; }
@@ -293,17 +338,33 @@ function TdsRecon({ onBack }) {
       };
 
       evtSource.onerror = (e) => {
-        console.warn('[TDS] EventSource onerror fired. pipelineReceived:', pipelineReceivedRef.current, 'readyState:', evtSource.readyState);
+        console.warn('[TDS] EventSource onerror fired. pipelineReceived:', pipelineReceivedRef.current);
         evtSource.close();
         if (!pipelineReceivedRef.current) {
-          console.log('[TDS] onerror fallback: fetching /api/results directly');
-          fetch(`${API}/api/results`).then(r => r.json()).then(data => {
-            setResults(data);
-            setRunCount(prev => prev + 1);
-            setStatus('done');
-          }).catch(() => setStatus('error'));
-        } else {
-          console.log('[TDS] onerror ignored — pipeline_complete already received, drip-feed handling it');
+          // Retry with exponential backoff
+          const retryFetch = async (retries = 3) => {
+            for (let i = 0; i < retries; i++) {
+              console.log(`[TDS] Retry attempt ${i + 1}/${retries}`);
+              try {
+                const res = await fetch(`${API}/api/results`);
+                if (res.ok) {
+                  const data = await res.json();
+                  setResults(data);
+                  setRunCount(prev => prev + 1);
+                  setStatus('done');
+                  return;
+                }
+              } catch (err) {
+                // wait with exponential backoff
+              }
+              if (i < retries - 1) {
+                await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+              }
+            }
+            setStatus('error');
+            addAssistantMsg('Connection lost. The backend may have stopped.', ['Retry']);
+          };
+          retryFetch();
         }
       };
     } catch (err) {
@@ -762,6 +823,32 @@ function TdsRecon({ onBack }) {
             Lekha AI
             {runCount > 0 && <span className="tds-rules-badge">Run #{runCount}</span>}
           </div>
+          {status === 'running' && (
+            <div className="tds-agent-status-line">
+              {(() => {
+                let activeAgent = null;
+                for (const e of visibleEvents) {
+                  if (e.type === 'agent_start') activeAgent = e.agent;
+                  if (e.type === 'agent_done' && activeAgent === e.agent) activeAgent = null;
+                }
+                if (!activeAgent) return null;
+                const config = AGENT_CONFIG[activeAgent];
+                const idx = agentThinkingIdx[activeAgent] || 0;
+                const text = config?.thinkingStates?.[idx] || 'Processing...';
+                return (
+                  <span>
+                    <span className="tds-status-agent">{'\u25D4'} {activeAgent}</span>
+                    <span className="tds-status-text"> {'\u2014'} {text}</span>
+                  </span>
+                );
+              })()}
+            </div>
+          )}
+          {status === 'done' && visibleEvents.length > 0 && (
+            <div className="tds-agent-status-line done">
+              <span>{'\u2713'} Complete {'\u2014'} 4 agents finished</span>
+            </div>
+          )}
           <div className="tds-chat-body" ref={logRef}>
             {/* Chat messages */}
             {chatMessages.map((msg, mi) => (
@@ -841,7 +928,10 @@ function TdsRecon({ onBack }) {
                               {getAgentIconLetter(block.agent)}
                             </div>
                             <span className="tds-agent-name">{block.agent}</span>
-                            {isActive && (
+                            {isActive && pendingQuestion?.agent === block.agent && !pendingQuestion._answered && (
+                              <span className="tds-agent-status-badge waiting">Waiting for input</span>
+                            )}
+                            {isActive && !(pendingQuestion?.agent === block.agent && !pendingQuestion._answered) && (
                               <span className="tds-agent-status-badge running">Working</span>
                             )}
                             {isDone && block.endTime != null && block.startTime != null && (
@@ -873,6 +963,73 @@ function TdsRecon({ onBack }) {
                                 {e.message}
                               </div>
                             ))}
+
+                          {/* Interactive question from agent */}
+                          {pendingQuestion && pendingQuestion.agent === block.agent && !pendingQuestion._answered && (
+                            <div className="tds-question-block">
+                              <div className="tds-question-header">
+                                <span className="tds-question-icon">?</span>
+                                <span className="tds-question-agent">{block.agent} needs your input</span>
+                              </div>
+                              <div className="tds-question-text">{pendingQuestion.message}</div>
+                              <div className="tds-question-options">
+                                {pendingQuestion.options?.map((opt) => (
+                                  <button
+                                    key={opt.id}
+                                    className={`tds-question-option ${questionAnswer.selected.includes(opt.id) ? 'selected' : ''}`}
+                                    onClick={() => {
+                                      if (pendingQuestion.multi_select) {
+                                        setQuestionAnswer(prev => ({
+                                          ...prev,
+                                          selected: prev.selected.includes(opt.id)
+                                            ? prev.selected.filter(s => s !== opt.id)
+                                            : [...prev.selected, opt.id]
+                                        }));
+                                      } else {
+                                        setQuestionAnswer(prev => ({ ...prev, selected: [opt.id] }));
+                                      }
+                                    }}
+                                  >
+                                    <div className="tds-option-radio">{questionAnswer.selected.includes(opt.id) ? '\u25CF' : '\u25CB'}</div>
+                                    <div className="tds-option-content">
+                                      <div className="tds-option-label">{opt.label}</div>
+                                      {opt.description && <div className="tds-option-desc">{opt.description}</div>}
+                                    </div>
+                                  </button>
+                                ))}
+                                {pendingQuestion.allow_text_input && (
+                                  <button
+                                    className={`tds-question-option ${questionAnswer.selected.includes('_other') ? 'selected' : ''}`}
+                                    onClick={() => setQuestionAnswer(prev => ({ ...prev, selected: ['_other'] }))}
+                                  >
+                                    <div className="tds-option-radio">{questionAnswer.selected.includes('_other') ? '\u25CF' : '\u25CB'}</div>
+                                    <div className="tds-option-content">
+                                      <div className="tds-option-label">Other...</div>
+                                      <div className="tds-option-desc">Provide custom instructions</div>
+                                    </div>
+                                  </button>
+                                )}
+                              </div>
+                              {questionAnswer.selected.includes('_other') && (
+                                <input
+                                  className="tds-question-text-input"
+                                  type="text"
+                                  placeholder="Type your instructions..."
+                                  value={questionAnswer.textInput}
+                                  onChange={e => setQuestionAnswer(prev => ({ ...prev, textInput: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') submitAnswer(); }}
+                                  autoFocus
+                                />
+                              )}
+                              <button
+                                className="tds-question-submit"
+                                disabled={questionAnswer.selected.length === 0}
+                                onClick={submitAnswer}
+                              >
+                                Submit Decision
+                              </button>
+                            </div>
+                          )}
 
                           {/* Completion action chips */}
                           {isDone && config?.completionActions && (
