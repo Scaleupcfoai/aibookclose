@@ -960,3 +960,69 @@
 .tds-agent-status-line.done { color: var(--accent-green); }
 .tds-status-agent { font-weight: 600; color: var(--text-secondary); }
 .tds-status-text { font-style: italic; }
+
+/* ── LLM Call/Response Events ── */
+.tds-log-line.llm_call {
+  color: var(--accent-purple);
+  font-style: italic;
+}
+.tds-llm-label {
+  font-weight: 600;
+  margin-right: 4px;
+}
+.tds-llm-model {
+  font-size: 10px;
+  background: rgba(124,58,237,0.1);
+  color: var(--accent-purple);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-family: var(--font-mono);
+}
+.tds-log-line.llm_response {
+  color: var(--accent-purple);
+}
+.tds-llm-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-left: 6px;
+}
+
+/* ── LLM Insight Card ── */
+.tds-insight-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 4px 0 4px 28px;
+  background: rgba(70,114,115,0.06);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  opacity: 0;
+  animation: tds-fade-in 0.3s ease forwards;
+}
+.tds-insight-icon { flex-shrink: 0; font-size: 14px; }
+.tds-insight-content { flex: 1; }
+
+/* ── Human Needed ── */
+.tds-human-needed {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 4px 0 4px 28px;
+  background: rgba(202,138,4,0.06);
+  border-left: 3px solid var(--accent-yellow);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  opacity: 0;
+  animation: tds-fade-in 0.3s ease forwards;
+}
+.tds-human-icon { flex-shrink: 0; font-size: 14px; }
+.tds-human-content { flex: 1; }

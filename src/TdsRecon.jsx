@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { API_URL, ENDPOINTS } from './config';
+import { api, createAuthSSE } from './services/api';
 import './tds-recon.css';
 
-const API = 'http://localhost:8000';
 const fmt = (n) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
 
 // Polyfill for browsers lacking Array.prototype.findLastIndex
@@ -272,11 +273,7 @@ function TdsRecon({ onBack }) {
 
     // POST answer to backend
     try {
-      await fetch(`${API}/api/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(answer),
-      });
+      await api.post(ENDPOINTS.answer, answer);
     } catch (err) {
       console.error('[TDS] Failed to submit answer:', err);
     }
@@ -297,15 +294,12 @@ function TdsRecon({ onBack }) {
     addAssistantMsg('Starting reconciliation pipeline. Running 4 agents: Parser \u2192 Matcher \u2192 TDS Checker \u2192 Reporter...');
 
     // If user uploaded files, upload them first
-    let streamUrl = `${API}/api/run/stream`;
     if (useUpload && uploadedFiles.form26 && uploadedFiles.tally) {
       try {
         const formData = new FormData();
         formData.append('form26', uploadedFiles.form26);
         formData.append('tally', uploadedFiles.tally);
-        const uploadRes = await fetch(`${API}/api/upload`, { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Upload failed');
-        streamUrl = `${API}/api/run/stream/upload`;
+        await api.post(ENDPOINTS.upload, formData);
       } catch (err) {
         setVisibleEvents([{ agent: 'Upload', type: 'error', message: `Upload failed: ${err.message}` }]);
         setStatus('error');
@@ -313,62 +307,74 @@ function TdsRecon({ onBack }) {
       }
     }
 
+    // TODO: company_id and financial_year should come from app context
+    const companyId = 'default';
+    const fy = '2024-25';
+    const streamUrl = `${ENDPOINTS.reconStream}?company_id=${companyId}&financial_year=${fy}`;
+
     try {
-      const evtSource = new EventSource(streamUrl);
+      console.log('[TDS] SSE opening:', streamUrl);
+      let runId = null;
 
-      console.log('[TDS] EventSource opened:', streamUrl);
-
-      evtSource.onmessage = (msg) => {
-        try {
-          const event = JSON.parse(msg.data);
+      // Use auth-aware SSE (fetch-based, supports Bearer token)
+      const closeSSE = createAuthSSE(
+        streamUrl,
+        // onEvent — each SSE event
+        (event) => {
           if (event.type === 'keepalive') return;
           console.log('[TDS] SSE event:', event.type, event.agent, '| queue size:', eventQueueRef.current.length);
 
+          if (event.run_id) runId = event.run_id;
+
           if (event.type === 'pipeline_complete') {
             pipelineReceivedRef.current = true;
-            evtSource.close();
-            enqueueEvent({ ...event, _pipelineComplete: true });
+            closeSSE();
+            // Store run_id for report fetches
+            enqueueEvent({ ...event, _pipelineComplete: true, _runId: runId });
             return;
           }
 
           enqueueEvent(event);
-        } catch (e) {
-          console.error('[TDS] SSE parse error:', e);
-        }
-      };
-
-      evtSource.onerror = (e) => {
-        console.warn('[TDS] EventSource onerror fired. pipelineReceived:', pipelineReceivedRef.current);
-        evtSource.close();
-        if (!pipelineReceivedRef.current) {
-          // Retry with exponential backoff
-          const retryFetch = async (retries = 3) => {
-            for (let i = 0; i < retries; i++) {
-              console.log(`[TDS] Retry attempt ${i + 1}/${retries}`);
-              try {
-                const res = await fetch(`${API}/api/results`);
-                if (res.ok) {
-                  const data = await res.json();
-                  setResults(data);
+        },
+        // onError — connection lost or stream ended
+        (err) => {
+          console.warn('[TDS] SSE error:', err?.message, 'pipelineReceived:', pipelineReceivedRef.current);
+          if (!pipelineReceivedRef.current) {
+            // Retry with exponential backoff — fetch summary directly
+            const retryFetch = async (retries = 3) => {
+              for (let i = 0; i < retries; i++) {
+                console.log(`[TDS] Retry attempt ${i + 1}/${retries}`);
+                try {
+                  if (runId) {
+                    const data = await api.get(ENDPOINTS.reportSummary(runId));
+                    setResults({ reconciliation_summary: data });
+                  } else {
+                    const data = await api.get(`${ENDPOINTS.reconRuns}?company_id=${companyId}`);
+                    if (data?.length > 0) {
+                      const latest = data[0];
+                      const summary = await api.get(ENDPOINTS.reportSummary(latest.run_id));
+                      setResults({ reconciliation_summary: summary });
+                      runId = latest.run_id;
+                    }
+                  }
                   setRunCount(prev => prev + 1);
                   setStatus('done');
                   return;
+                } catch {
+                  if (i < retries - 1) await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
                 }
-              } catch (err) {
-                // wait with exponential backoff
               }
-              if (i < retries - 1) {
-                await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
-              }
-            }
-            setStatus('error');
-            addAssistantMsg('Connection lost. The backend may have stopped.', ['Retry']);
-          };
-          retryFetch();
-        }
-      };
+              setStatus('error');
+              addAssistantMsg('Connection lost. The backend may have stopped.', ['Retry']);
+            };
+            retryFetch();
+          }
+        },
+        // onOpen
+        () => console.log('[TDS] SSE connected')
+      );
     } catch (err) {
-      setVisibleEvents([{ agent: 'Error', type: 'error', message: `Failed to connect to API: ${err.message}. Make sure api_server.py is running on port 8000.` }]);
+      setVisibleEvents([{ agent: 'Error', type: 'error', message: `Failed to connect: ${err.message}. Make sure the backend is running on port 8000.` }]);
       setStatus('error');
     }
   };
@@ -387,12 +393,7 @@ function TdsRecon({ onBack }) {
 
     setStatus('running');
     try {
-      const res = await fetch(`${API}/api/review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decisions }),
-      });
-      const data = await res.json();
+      const data = await api.post('/api/review', { decisions });
       // Learning Agent returns its own events (corrections + Checker + Reporter only)
       setVisibleEvents(prev => [...prev, ...(data.events || [])]);
       setResults(data.results || null);
@@ -901,7 +902,7 @@ function TdsRecon({ onBack }) {
                       <div className="tds-chat-assistant-bubble">Download your reports:</div>
                       <div className="tds-chat-download-list">
                         {msg.files.map((f, fi) => (
-                          <a key={fi} className="tds-chat-download-link" href={`${API}/api/download/${f.name}`} download={f.name}>
+                          <a key={fi} className="tds-chat-download-link" href={`${API_URL}/api/download/${f.name}`} download={f.name}>
                             <span className="tds-chat-download-icon">{'\u2B07'}</span>
                             {f.label}
                           </a>
@@ -952,16 +953,40 @@ function TdsRecon({ onBack }) {
                             </div>
                           )}
 
-                          {/* Detail log lines */}
+                          {/* Detail log lines + LLM events */}
                           {block.events
                             .filter(e => e.type !== 'agent_start' && e.type !== 'agent_done')
                             .map((e, ei) => (
-                              <div key={ei} className={`tds-log-line ${e.type}`} style={{ animationDelay: `${ei * 0.05}s` }}>
-                                <span className="log-prefix">
-                                  {e.type === 'detail' ? '\u251C\u2500' : e.type === 'success' ? '\u2713' : e.type === 'error' ? '\u2717' : e.type === 'warning' ? '\u26A0' : '\u2022'}
-                                </span>
-                                {e.message}
-                              </div>
+                              e.type === 'llm_call' ? (
+                                <div key={ei} className="tds-log-line llm_call" style={{ animationDelay: `${ei * 0.05}s` }}>
+                                  <span className="log-prefix">{'\uD83D\uDCAD'}</span>
+                                  <span className="tds-llm-label">Asking AI...</span> {e.message}
+                                  {e.data?.model && <span className="tds-llm-model">{e.data.model}</span>}
+                                </div>
+                              ) : e.type === 'llm_response' ? (
+                                <div key={ei} className="tds-log-line llm_response" style={{ animationDelay: `${ei * 0.05}s` }}>
+                                  <span className="log-prefix">{'\u2726'}</span>
+                                  {e.message}
+                                  {e.data?.response_time_s && <span className="tds-llm-time">{e.data.response_time_s.toFixed(1)}s</span>}
+                                </div>
+                              ) : e.type === 'llm_insight' ? (
+                                <div key={ei} className="tds-insight-card" style={{ animationDelay: `${ei * 0.05}s` }}>
+                                  <span className="tds-insight-icon">{'\uD83D\uDD0D'}</span>
+                                  <div className="tds-insight-content">{e.message}</div>
+                                </div>
+                              ) : e.type === 'human_needed' ? (
+                                <div key={ei} className="tds-human-needed" style={{ animationDelay: `${ei * 0.05}s` }}>
+                                  <span className="tds-human-icon">{'\uD83D\uDC64'}</span>
+                                  <div className="tds-human-content">{e.message}</div>
+                                </div>
+                              ) : (
+                                <div key={ei} className={`tds-log-line ${e.type}`} style={{ animationDelay: `${ei * 0.05}s` }}>
+                                  <span className="log-prefix">
+                                    {e.type === 'detail' ? '\u251C\u2500' : e.type === 'success' ? '\u2713' : e.type === 'error' ? '\u2717' : e.type === 'warning' ? '\u26A0' : '\u2022'}
+                                  </span>
+                                  {e.message}
+                                </div>
+                              )
                             ))}
 
                           {/* Interactive question from agent */}
