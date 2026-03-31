@@ -56,7 +56,7 @@ const AGENT_CONFIG = {
 };
 
 function TdsRecon({ onBack }) {
-  const { selectedCompany, refreshCompanies, setSelectedCompany } = useAuth();
+  const { user, selectedCompany, refreshCompanies, setSelectedCompany } = useAuth();
   const [companyId, setCompanyId] = useState(selectedCompany?.id || null);
   const [status, setStatus] = useState('idle'); // idle | running | done | error
   const [visibleEvents, setVisibleEvents] = useState([]);
@@ -67,11 +67,11 @@ function TdsRecon({ onBack }) {
   const [runCount, setRunCount] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState({ form26: null, tally: null });
   const [useUpload, setUseUpload] = useState(false);
+  const firmName = user?.firm_name || user?.email?.split('@')[0] || 'your firm';
   const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', content: companyId
-      ? 'Welcome to TDS Reconciliation. I can help you reconcile Form 26 against Tally books.'
-      : 'Welcome to TDS Reconciliation. Upload your Form 26 and Tally files to get started.',
-      actions: companyId ? ['Run Reconciliation', 'Upload Files'] : ['Upload Files'] },
+    companyId
+      ? { role: 'assistant', content: 'Welcome to TDS Reconciliation. I can help you reconcile Form 26 against Tally books.', actions: ['Run Reconciliation', 'Upload Files'] }
+      : { role: 'assistant', content: `I see no client company registered for ${firmName}. Would you like to create one?\n\nYou can say **"yes"** and I\'ll ask for the details, or type something like **"create company HPC, PAN AAACH1234A"** directly.`, actions: ['Create Company'] },
   ]);
   const [chatInput, setChatInput] = useState('');
   const [agentThinkingIdx, setAgentThinkingIdx] = useState({});
@@ -194,6 +194,30 @@ function TdsRecon({ onBack }) {
     setChatMessages(prev => [...prev, { role: 'assistant', content, actions }]);
   };
 
+  // Create company via API and update state
+  const createCompanyFromChat = async (name, pan) => {
+    addAssistantMsg(`Creating company **${name}** (PAN: ${pan})...`);
+    try {
+      const result = await api.post(ENDPOINTS.companies, {
+        company_name: name,
+        pan: pan,
+        company_type: 'company',
+      });
+      const comps = await refreshCompanies();
+      if (comps?.length > 0) {
+        const created = comps.find(c => c.pan === pan) || comps[0];
+        setCompanyId(created.id);
+        setSelectedCompany(created);
+        addAssistantMsg(
+          `Company **${created.company_name}** created successfully!\n\nNow you can upload Form 26 and Tally files, then run reconciliation.`,
+          ['Upload Files', 'Run Reconciliation']
+        );
+      }
+    } catch (err) {
+      addAssistantMsg(`Failed to create company: ${err.message}. Please try again.`, ['Create Company']);
+    }
+  };
+
   // Handle chat commands
   const handleCommand = (text) => {
     const lower = text.toLowerCase().trim();
@@ -202,6 +226,46 @@ function TdsRecon({ onBack }) {
       runPipeline();
       return;
     }
+
+    // Company creation — interactive prompt
+    if (lower === 'yes' || lower === 'create company' || lower === 'create' || lower.includes('let\'s create') || lower.includes('lets create')) {
+      // Show Claude Code-style question for company details
+      setPendingQuestion({
+        type: 'question',
+        agent: 'Lekha AI',
+        question_id: 'create_company',
+        message: 'Enter your client company details:',
+        _isCompanyCreation: true,
+      });
+      addAssistantMsg('Please enter your client company details below:');
+      return;
+    }
+
+    // Company creation — inline capture: "create company HPC, PAN AAACH1234A"
+    const companyMatch = lower.match(/(?:create\s+company|company\s+name[:\s]+|add\s+company)\s+([^,]+?)(?:[,\s]+pan[:\s]*([a-z0-9]+))?$/i);
+    if (companyMatch) {
+      const name = text.match(/(?:create\s+company|company\s+name[:\s]+|add\s+company)\s+([^,]+?)(?:[,\s]+pan)?/i)?.[1]?.trim();
+      const pan = text.match(/pan[:\s]*([A-Z0-9]+)/i)?.[1]?.trim() || 'PENDING';
+      if (name) {
+        createCompanyFromChat(name, pan);
+        return;
+      }
+    }
+
+    // Also handle direct name+PAN when question is pending
+    if (pendingQuestion?._isCompanyCreation && !lower.includes('run') && !lower.includes('upload')) {
+      // Try to parse "HPC, PAN AAACH1234A" or just "HPC"
+      const parts = text.split(/[,;]/);
+      const name = parts[0]?.trim();
+      const panPart = parts[1]?.trim() || '';
+      const pan = panPart.replace(/^pan[:\s]*/i, '').trim() || 'PENDING';
+      if (name && name.length > 1) {
+        setPendingQuestion(null);
+        createCompanyFromChat(name, pan);
+        return;
+      }
+    }
+
     if (lower.includes('run') || lower.includes('start') || lower.includes('reconcil')) {
       runPipeline();
       return;
@@ -1125,6 +1189,65 @@ function TdsRecon({ onBack }) {
                 )}
               </div>
             ))}
+            {/* Company creation form — shown in chat when no company exists */}
+            {pendingQuestion?._isCompanyCreation && !pendingQuestion._answered && (
+              <div className="tds-chat-assistant">
+                <div className="tds-chat-avatar">L</div>
+                <div className="tds-chat-assistant-content">
+                  <div className="tds-question-block" style={{ margin: 0 }}>
+                    <div className="tds-question-header">
+                      <span className="tds-question-icon">?</span>
+                      <span className="tds-question-agent">New Client Company</span>
+                    </div>
+                    <div className="tds-question-text">Enter company details to get started</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <input
+                        className="tds-question-text-input"
+                        type="text"
+                        placeholder="Company name (e.g. HPC Pvt Ltd)"
+                        value={questionAnswer.textInput || ''}
+                        onChange={e => setQuestionAnswer(prev => ({ ...prev, textInput: e.target.value }))}
+                        style={{ marginBottom: 0 }}
+                        autoFocus
+                      />
+                      <input
+                        className="tds-question-text-input"
+                        type="text"
+                        placeholder="PAN (e.g. AAACH1234A)"
+                        value={questionAnswer.selected[0] || ''}
+                        onChange={e => setQuestionAnswer(prev => ({ ...prev, selected: [e.target.value] }))}
+                        style={{ marginBottom: 0 }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && questionAnswer.textInput) {
+                            setPendingQuestion(prev => prev ? { ...prev, _answered: true } : null);
+                            const name = questionAnswer.textInput.trim();
+                            const pan = (questionAnswer.selected[0] || 'PENDING').trim();
+                            setQuestionAnswer({ selected: [], textInput: '' });
+                            setChatMessages(prev => [...prev, { role: 'user', content: `${name}, PAN ${pan}` }]);
+                            createCompanyFromChat(name, pan);
+                          }
+                        }}
+                      />
+                    </div>
+                    <button
+                      className="tds-question-submit"
+                      style={{ marginTop: 8 }}
+                      disabled={!questionAnswer.textInput?.trim()}
+                      onClick={() => {
+                        setPendingQuestion(prev => prev ? { ...prev, _answered: true } : null);
+                        const name = questionAnswer.textInput.trim();
+                        const pan = (questionAnswer.selected[0] || 'PENDING').trim();
+                        setQuestionAnswer({ selected: [], textInput: '' });
+                        setChatMessages(prev => [...prev, { role: 'user', content: `${name}, PAN ${pan}` }]);
+                        createCompanyFromChat(name, pan);
+                      }}
+                    >
+                      Create Company
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={chatEndRef} />
           </div>
 
