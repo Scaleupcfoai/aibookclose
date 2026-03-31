@@ -139,18 +139,33 @@ function TdsRecon({ onBack, companyId: propCompanyId }) {
 
       if (item._pipelineComplete) {
         console.log('[TDS] drainQueue: pipeline_complete reached. Setting done.');
-        setResults(item.results || null);
+        // Production backend sends: { summary: {...}, errors: [...], run_id: "..." }
+        // Map to internal format for KPI cards and dashboard
+        const runId = item._runId || item.run_id || null;
+        setResults({ reconciliation_summary: item.summary || {}, run_id: runId });
         setRunCount(prev => prev + 1);
         setStatus('done');
-        const s = item.results?.reconciliation_summary;
+        const s = item.summary;
         if (s) {
           const m = s.matching || {};
           const c = s.compliance || {};
+          const hasStats = m.total_resolved || c.total_findings;
           setChatMessages(prev => [...prev, {
             role: 'assistant',
-            content: `Reconciliation complete!\n\n**${m.total_resolved || 0} entries resolved** (${m.matched_with_tds || 0} with TDS + ${m.below_threshold_resolved || 0} exempt)\n**${c.total_findings || 0} findings** (${c.errors || 0} errors, ${c.warnings || 0} warnings)\n**\u20B9${fmt(c.missing_tds_exposure || 0)}** missing TDS exposure\n\nWhat would you like to explore?`,
+            content: hasStats
+              ? `Reconciliation complete!\n\n**${m.total_resolved || 0} entries resolved** (${m.matched_with_tds || 0} with TDS + ${m.below_threshold_resolved || 0} exempt)\n**${c.total_findings || 0} findings** (${c.errors || 0} errors, ${c.warnings || 0} warnings)\n**\u20B9${fmt(c.missing_tds_exposure || 0)}** missing TDS exposure\n\nWhat would you like to explore?`
+              : `Reconciliation complete!${item.message ? ' ' + item.message : ''}\n\nWhat would you like to explore?`,
             actions: ['Show Summary', 'Show Matches', 'View Findings', 'Export Report'],
           }]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `Reconciliation complete!${item.message ? ' ' + item.message : ''}`,
+            actions: ['Show Summary', 'Export Report'],
+          }]);
+        }
+        if (item.errors?.length > 0) {
+          console.warn('[TDS] Pipeline completed with errors:', item.errors);
         }
         drainTimerRef.current = null;
         return;
@@ -921,7 +936,7 @@ function TdsRecon({ onBack, companyId: propCompanyId }) {
                       <div className="tds-chat-assistant-bubble">Download your reports:</div>
                       <div className="tds-chat-download-list">
                         {msg.files.map((f, fi) => (
-                          <a key={fi} className="tds-chat-download-link" href={`${API_URL}/api/download/${f.name}`} download={f.name}>
+                          <a key={fi} className="tds-chat-download-link" href={`${API_URL}${ENDPOINTS.reportDownload(results?.run_id || '', f.name)}`} download={f.name}>
                             <span className="tds-chat-download-icon">{'\u2B07'}</span>
                             {f.label}
                           </a>
