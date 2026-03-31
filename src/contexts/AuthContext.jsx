@@ -48,7 +48,9 @@ export function AuthProvider({ children }) {
 
   async function fetchUserProfile() {
     try {
+      console.log("here")
       const me = await api.get(ENDPOINTS.authMe);
+      console.log(me)
       setUser(me);
       // Once we have user, fetch companies
       const comps = await api.get(ENDPOINTS.companies);
@@ -69,21 +71,25 @@ export function AuthProvider({ children }) {
   }
 
   async function registerFirm(firmName, firmPan, firmAddress) {
-    setError(null);
-    try {
-      const result = await api.post(ENDPOINTS.registerFirm, {
-        firm_name: firmName,
-        firm_pan: firmPan || '',
-        firm_address: firmAddress || '',
-      });
-      // Refresh user profile to get firm_id
-      await fetchUserProfile();
-      return result;
-    } catch (err) {
-      setError(err.message);
-      return null;
-    }
+  setError(null);
+  console.log('token at registerFirm time:', _authToken);
+  try {
+    const result = await api.post(ENDPOINTS.registerFirm, {
+      firm_name: firmName,
+      firm_pan: firmPan || '',
+      firm_address: firmAddress || '',
+    });
+
+    // Force Supabase to refresh the JWT so it includes firm_id
+    await supabase.auth.refreshSession();  // ← add this
+
+    await fetchUserProfile();
+    return result;
+  } catch (err) {
+    setError(err.message);
+    return null;
   }
+}
 
   async function signIn(email, password) {
     setError(null);
