@@ -56,8 +56,8 @@ const AGENT_CONFIG = {
 };
 
 function TdsRecon({ onBack }) {
-  const { selectedCompany } = useAuth();
-  const companyId = selectedCompany?.id || null;
+  const { selectedCompany, refreshCompanies, setSelectedCompany } = useAuth();
+  const [companyId, setCompanyId] = useState(selectedCompany?.id || null);
   const [status, setStatus] = useState('idle'); // idle | running | done | error
   const [visibleEvents, setVisibleEvents] = useState([]);
   const [results, setResults] = useState(null);
@@ -68,7 +68,10 @@ function TdsRecon({ onBack }) {
   const [uploadedFiles, setUploadedFiles] = useState({ form26: null, tally: null });
   const [useUpload, setUseUpload] = useState(false);
   const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', content: 'Welcome to TDS Reconciliation. I can help you reconcile Form 26 against Tally books.', actions: ['Run Reconciliation', 'Upload Files'] },
+    { role: 'assistant', content: companyId
+      ? 'Welcome to TDS Reconciliation. I can help you reconcile Form 26 against Tally books.'
+      : 'Welcome to TDS Reconciliation. Upload your Form 26 and Tally files to get started.',
+      actions: companyId ? ['Run Reconciliation', 'Upload Files'] : ['Upload Files'] },
   ]);
   const [chatInput, setChatInput] = useState('');
   const [agentThinkingIdx, setAgentThinkingIdx] = useState({});
@@ -80,6 +83,11 @@ function TdsRecon({ onBack }) {
   const eventQueueRef = useRef([]);
   const drainTimerRef = useRef(null);
   const pipelineReceivedRef = useRef(false);
+
+  // Sync companyId when selectedCompany changes (e.g. from company selector)
+  useEffect(() => {
+    if (selectedCompany?.id) setCompanyId(selectedCompany.id);
+  }, [selectedCompany]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -309,15 +317,16 @@ function TdsRecon({ onBack }) {
     eventQueueRef.current = [];
     if (drainTimerRef.current) { clearTimeout(drainTimerRef.current); drainTimerRef.current = null; }
     pipelineReceivedRef.current = false;
-    addAssistantMsg('Starting reconciliation pipeline. Running 4 agents: Parser \u2192 Matcher \u2192 TDS Checker \u2192 Reporter...');
 
-    // If user uploaded files, upload them first
-    if (useUpload && uploadedFiles.form26 && uploadedFiles.tally) {
+    // Step 1: Upload files if provided
+    if (uploadedFiles.form26 && uploadedFiles.tally) {
+      addAssistantMsg('Uploading files...');
       try {
         const formData = new FormData();
         formData.append('form26', uploadedFiles.form26);
         formData.append('tally', uploadedFiles.tally);
         await api.post(ENDPOINTS.upload, formData);
+        addAssistantMsg('Files uploaded. Parser will auto-detect company from file headers.');
       } catch (err) {
         setVisibleEvents([{ agent: 'Upload', type: 'error', message: `Upload failed: ${err.message}` }]);
         setStatus('error');
@@ -325,13 +334,30 @@ function TdsRecon({ onBack }) {
       }
     }
 
-    if (!companyId) {
-      addAssistantMsg('No company selected. Please create a company first via the API.');
-      setStatus('error');
+    // Step 2: Resolve company_id — refresh from backend after upload
+    let activeCompanyId = companyId;
+    if (!activeCompanyId) {
+      try {
+        const comps = await refreshCompanies();
+        if (comps?.length > 0) {
+          activeCompanyId = comps[0].id;
+          setCompanyId(activeCompanyId);
+          setSelectedCompany(comps[0]);
+          console.log('[TDS] Auto-selected company after upload:', activeCompanyId, comps[0].company_name);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!activeCompanyId) {
+      addAssistantMsg('No company found. Please upload Form 26 and Tally files first — the parser will auto-create the company.', ['Upload Files']);
+      setStatus('idle');
       return;
     }
+
+    addAssistantMsg('Starting reconciliation pipeline. Running agents: Parser \u2192 Matcher \u2192 TDS Checker \u2192 Reporter...');
     const fy = '2024-25';
-    const streamUrl = `${ENDPOINTS.reconStream}?company_id=${companyId}&financial_year=${fy}`;
+    const streamUrl = `${ENDPOINTS.reconStream}?company_id=${activeCompanyId}&financial_year=${fy}`;
 
     try {
       console.log('[TDS] SSE opening:', streamUrl);
@@ -370,7 +396,7 @@ function TdsRecon({ onBack }) {
                     const data = await api.get(ENDPOINTS.reportSummary(runId));
                     setResults({ reconciliation_summary: data });
                   } else {
-                    const data = await api.get(`${ENDPOINTS.reconRuns}?company_id=${companyId}`);
+                    const data = await api.get(`${ENDPOINTS.reconRuns}?company_id=${activeCompanyId}`);
                     if (data?.length > 0) {
                       const latest = data[0];
                       const summary = await api.get(ENDPOINTS.reportSummary(latest.run_id));
