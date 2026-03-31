@@ -54,7 +54,7 @@ const AGENT_CONFIG = {
   },
 };
 
-function TdsRecon({ onBack }) {
+function TdsRecon({ onBack, companyId: propCompanyId }) {
   const [status, setStatus] = useState('idle'); // idle | running | done | error
   const [visibleEvents, setVisibleEvents] = useState([]);
   const [results, setResults] = useState(null);
@@ -64,6 +64,7 @@ function TdsRecon({ onBack }) {
   const [runCount, setRunCount] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState({ form26: null, tally: null });
   const [useUpload, setUseUpload] = useState(false);
+  const [companyId, setCompanyId] = useState(propCompanyId || null);
   const [chatMessages, setChatMessages] = useState([
     { role: 'assistant', content: 'Welcome to TDS Reconciliation. I can help you reconcile Form 26 against Tally books.', actions: ['Run Reconciliation', 'Upload Files'] },
   ]);
@@ -77,6 +78,21 @@ function TdsRecon({ onBack }) {
   const eventQueueRef = useRef([]);
   const drainTimerRef = useRef(null);
   const pipelineReceivedRef = useRef(false);
+
+  // Auto-fetch first company if none provided
+  useEffect(() => {
+    if (companyId) return;
+    api.get(ENDPOINTS.companies).then(companies => {
+      if (companies?.length > 0) {
+        setCompanyId(companies[0].id);
+        console.log('[TDS] Auto-selected company:', companies[0].id, companies[0].company_name);
+      } else {
+        console.warn('[TDS] No companies found — reconciliation will fail. Create a company first.');
+      }
+    }).catch(err => {
+      console.warn('[TDS] Could not fetch companies:', err.message);
+    });
+  }, [companyId]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -307,8 +323,11 @@ function TdsRecon({ onBack }) {
       }
     }
 
-    // TODO: company_id and financial_year should come from app context
-    const companyId = 'default';
+    if (!companyId) {
+      addAssistantMsg('No company selected. Please create a company first via the API.');
+      setStatus('error');
+      return;
+    }
     const fy = '2024-25';
     const streamUrl = `${ENDPOINTS.reconStream}?company_id=${companyId}&financial_year=${fy}`;
 
