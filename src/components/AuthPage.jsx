@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 function AuthPage() {
-  const { signUp, signIn, registerFirm, error } = useAuth();
-  const [mode, setMode] = useState('login'); // login | signup | register-firm
+  const { signUp, signIn, registerFirm, error, isAuthenticated, needsFirmRegistration } = useAuth();
+  const [mode, setMode] = useState(isAuthenticated && needsFirmRegistration ? 'register-firm' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firmName, setFirmName] = useState('');
@@ -12,6 +12,11 @@ function AuthPage() {
   const [localMsg, setLocalMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // If already authenticated but needs firm registration, force that mode
+  if (isAuthenticated && needsFirmRegistration && mode !== 'register-firm') {
+    setMode('register-firm');
+  }
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -19,6 +24,7 @@ function AuthPage() {
     const result = await signIn(email, password);
     setSubmitting(false);
     if (!result) setLocalMsg('Login failed. Check your credentials.');
+    // Redirect happens automatically via AuthContext → Root re-renders
   };
 
   const handleSignup = async (e) => {
@@ -28,19 +34,22 @@ function AuthPage() {
     const result = await signUp(email, password);
     setSubmitting(false);
     if (result) {
-      setLocalMsg('Account created. Now register your CA firm.');
+      setLocalMsg('Account created! Now register your CA firm.');
       setMode('register-firm');
     }
   };
 
   const handleRegisterFirm = async (e) => {
     e.preventDefault();
+    if (!firmName.trim()) { setLocalMsg('Firm name is required.'); return; }
     setSubmitting(true);
     setLocalMsg('');
     const result = await registerFirm(firmName, firmPan, firmAddress);
     setSubmitting(false);
     if (result) {
-      setLocalMsg('Firm registered! Redirecting...');
+      // JWT is refreshed inside registerFirm, needsFirmRegistration is set to false,
+      // Root component will re-render and show App instead of AuthPage
+      setLocalMsg('Firm registered! Loading dashboard...');
     }
   };
 

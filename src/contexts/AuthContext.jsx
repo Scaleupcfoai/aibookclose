@@ -13,13 +13,13 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
-  const [user, setUser] = useState(null);       // { user_id, email, firm_id, role }
+  const [user, setUser] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [needsFirmRegistration, setNeedsFirmRegistration] = useState(false);
 
-  // On mount: check for existing session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       handleSession(s);
@@ -43,20 +43,27 @@ export function AuthProvider({ children }) {
       setUser(null);
       setCompanies([]);
       setSelectedCompany(null);
+      setNeedsFirmRegistration(false);
     }
   }
 
   async function fetchUserProfile() {
     try {
-      console.log("here")
       const me = await api.get(ENDPOINTS.authMe);
-      console.log(me)
       setUser(me);
-      // Once we have user, fetch companies
-      const comps = await api.get(ENDPOINTS.companies);
-      setCompanies(comps || []);
-      if (comps?.length > 0 && !selectedCompany) {
-        setSelectedCompany(comps[0]);
+      if (!me.firm_id) {
+        setNeedsFirmRegistration(true);
+        return;
+      }
+      setNeedsFirmRegistration(false);
+      try {
+        const comps = await api.get(ENDPOINTS.companies);
+        setCompanies(comps || []);
+        if (comps?.length > 0 && !selectedCompany) {
+          setSelectedCompany(comps[0]);
+        }
+      } catch {
+        setCompanies([]);
       }
     } catch (err) {
       console.warn('[Auth] Could not fetch profile:', err.message);
@@ -71,25 +78,27 @@ export function AuthProvider({ children }) {
   }
 
   async function registerFirm(firmName, firmPan, firmAddress) {
-  setError(null);
-  console.log('token at registerFirm time:', _authToken);
-  try {
-    const result = await api.post(ENDPOINTS.registerFirm, {
-      firm_name: firmName,
-      firm_pan: firmPan || '',
-      firm_address: firmAddress || '',
-    });
-
-    // Force Supabase to refresh the JWT so it includes firm_id
-    await supabase.auth.refreshSession();  // ← add this
-
-    await fetchUserProfile();
-    return result;
-  } catch (err) {
-    setError(err.message);
-    return null;
+    setError(null);
+    try {
+      const result = await api.post(ENDPOINTS.registerFirm, {
+        firm_name: firmName,
+        firm_pan: firmPan || '',
+        firm_address: firmAddress || '',
+      });
+      // Refresh the Supabase session to get updated JWT with firm_id
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      if (refreshData?.session) {
+        setAuthToken(refreshData.session.access_token);
+        setSession(refreshData.session);
+      }
+      setNeedsFirmRegistration(false);
+      await fetchUserProfile();
+      return result;
+    } catch (err) {
+      setError(err.message);
+      return null;
+    }
   }
-}
 
   async function signIn(email, password) {
     setError(null);
@@ -105,22 +114,19 @@ export function AuthProvider({ children }) {
     setAuthToken(null);
     setCompanies([]);
     setSelectedCompany(null);
+    setNeedsFirmRegistration(false);
   }
 
-  async function createCompany(companyData) {
-    setError(null);
+  async function refreshCompanies() {
     try {
-      const result = await api.post(ENDPOINTS.companies, companyData);
-      // Refresh companies list
       const comps = await api.get(ENDPOINTS.companies);
       setCompanies(comps || []);
-      if (!selectedCompany && comps?.length > 0) {
+      if (comps?.length > 0 && !selectedCompany) {
         setSelectedCompany(comps[0]);
       }
-      return result;
-    } catch (err) {
-      setError(err.message);
-      return null;
+      return comps;
+    } catch {
+      return [];
     }
   }
 
@@ -132,11 +138,12 @@ export function AuthProvider({ children }) {
     setSelectedCompany,
     loading,
     error,
+    needsFirmRegistration,
     signUp,
     signIn,
     signOut,
     registerFirm,
-    createCompany,
+    refreshCompanies,
     isAuthenticated: !!session,
   };
 

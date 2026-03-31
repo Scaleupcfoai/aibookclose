@@ -6,7 +6,7 @@ import AuthPage from './components/AuthPage.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 
 function Root() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, needsFirmRegistration } = useAuth();
 
   if (loading) {
     return (
@@ -16,7 +16,11 @@ function Root() {
     );
   }
 
-  return isAuthenticated ? <App /> : <AuthPage />;
+  if (!isAuthenticated || needsFirmRegistration) {
+    return <AuthPage />;
+  }
+
+  return <App />;
 }
 
 createRoot(document.getElementById('root')).render(
