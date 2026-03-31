@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { API_URL, ENDPOINTS } from './config';
-import { api, createAuthSSE } from './services/api';
+import { api, createAuthSSE, getAuthToken } from './services/api';
 import { useAuth } from './contexts/AuthContext';
 import './tds-recon.css';
 
@@ -16,44 +16,6 @@ if (!Array.prototype.findLastIndex) {
   };
 }
 
-// Agent thinking states and post-completion action options
-const AGENT_CONFIG = {
-  'Parser Agent': {
-    thinkingStates: [
-      'Reading Form 26 AS data...',
-      'Extracting vendor PANs and sections...',
-      'Parsing Tally payment registers...',
-      'Cross-referencing TDS ledger entries...',
-    ],
-    completionActions: ['Show TDS Details', 'Show Summary'],
-  },
-  'Matcher Agent': {
-    thinkingStates: [
-      'Learning matching rules from data patterns...',
-      'Running exact amount + PAN matching...',
-      'Fuzzy matching vendor names and dates...',
-      'Resolving multi-entry and split payments...',
-    ],
-    completionActions: ['Show Matches', 'View Unmatched', 'Show Summary'],
-  },
-  'TDS Checker': {
-    thinkingStates: [
-      'Validating TDS rates against Section rules...',
-      'Checking for missing Form 26 entries...',
-      'Flagging threshold exemptions under \u20B95,000...',
-      'Calculating missing TDS exposure...',
-    ],
-    completionActions: ['View Findings', 'Show Pending Issues', 'Show Summary'],
-  },
-  'Reporter Agent': {
-    thinkingStates: [
-      'Compiling reconciliation summary...',
-      'Generating section-wise breakdown...',
-      'Preparing downloadable reports...',
-    ],
-    completionActions: ['Show Summary', 'Export Report'],
-  },
-};
 
 function TdsRecon({ onBack }) {
   const { user, selectedCompany, refreshCompanies, setSelectedCompany } = useAuth();
@@ -74,7 +36,6 @@ function TdsRecon({ onBack }) {
       : { role: 'assistant', content: `I see no client company registered for ${firmName}. Would you like to create one?\n\nYou can say **"yes"** and I\'ll ask for the details, or type something like **"create company HPC, PAN AAACH1234A"** directly.`, actions: ['Create Company'] },
   ]);
   const [chatInput, setChatInput] = useState('');
-  const [agentThinkingIdx, setAgentThinkingIdx] = useState({});
   const [pendingQuestion, setPendingQuestion] = useState(null);
   const [questionAnswer, setQuestionAnswer] = useState({ selected: [], textInput: '' });
   const logRef = useRef(null);
@@ -92,37 +53,8 @@ function TdsRecon({ onBack }) {
   // Auto-scroll chat
   useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, visibleEvents, agentThinkingIdx]);
+  }, [chatMessages, visibleEvents]);
 
-  // Keep a ref to visibleEvents so the thinking interval can read latest without restarting
-  const visibleEventsRef = useRef(visibleEvents);
-  useEffect(() => { visibleEventsRef.current = visibleEvents; }, [visibleEvents]);
-
-  // Cycle thinking states for the currently active agent
-  useEffect(() => {
-    if (status !== 'running') {
-      setAgentThinkingIdx({});
-      return;
-    }
-    const interval = setInterval(() => {
-      setAgentThinkingIdx(prev => {
-        const events = visibleEventsRef.current;
-        const next = { ...prev };
-        // Find the active agent (last one without agent_done)
-        let activeAgent = null;
-        for (const e of events) {
-          if (e.type === 'agent_start') activeAgent = e.agent;
-          if (e.type === 'agent_done' && activeAgent === e.agent) activeAgent = null;
-        }
-        if (activeAgent && AGENT_CONFIG[activeAgent]) {
-          const states = AGENT_CONFIG[activeAgent].thinkingStates;
-          next[activeAgent] = ((prev[activeAgent] || 0) + 1) % states.length;
-        }
-        return next;
-      });
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [status]);
 
   // Drip-feed: reveal queued events one by one with delays
   const drainQueue = () => {
@@ -219,17 +151,14 @@ function TdsRecon({ onBack }) {
   };
 
   // Handle chat commands
-  const handleCommand = (text) => {
+  const handleCommand = async (text) => {
     const lower = text.toLowerCase().trim();
 
-    if (lower === 'retry') {
-      runPipeline();
-      return;
-    }
+    // Local actions that don't need LLM
+    if (lower === 'retry') { runPipeline(); return; }
 
     // Company creation — interactive prompt
     if (lower === 'yes' || lower === 'create company' || lower === 'create' || lower.includes('let\'s create') || lower.includes('lets create')) {
-      // Show Claude Code-style question for company details
       setPendingQuestion({
         type: 'question',
         agent: 'Lekha AI',
@@ -254,7 +183,6 @@ function TdsRecon({ onBack }) {
 
     // Also handle direct name+PAN when question is pending
     if (pendingQuestion?._isCompanyCreation && !lower.includes('run') && !lower.includes('upload')) {
-      // Try to parse "HPC, PAN AAACH1234A" or just "HPC"
       const parts = text.split(/[,;]/);
       const name = parts[0]?.trim();
       const panPart = parts[1]?.trim() || '';
@@ -266,51 +194,105 @@ function TdsRecon({ onBack }) {
       }
     }
 
-    if (lower.includes('run') || lower.includes('start') || lower.includes('reconcil')) {
+    if ((lower.includes('run') || lower.includes('start') || lower.includes('reconcil')) && !lower.includes('why') && !lower.includes('explain')) {
       runPipeline();
       return;
     }
-    if (lower.includes('upload')) {
-      fileInputRef.current?.click();
-      return;
-    }
-    if (lower.includes('match') || lower.includes('tds detail') || lower.includes('show match')) {
-      setActiveTab('tds_details');
-      addAssistantMsg(`Showing ${matches.length} TDS entries with reconciled status. Check the left panel.`);
-      return;
-    }
-    if (lower.includes('finding') || lower.includes('error') || lower.includes('issue') || lower.includes('pending')) {
-      setActiveTab('pending');
-      const pendingCount = findings.filter(f => f.severity === 'error' || f.severity === 'warning').length;
-      addAssistantMsg(`Showing ${pendingCount} pending items for review. Check the left panel.`);
-      return;
-    }
-    if (lower.includes('summary') || lower.includes('overview')) {
-      setActiveTab('summary');
-      addAssistantMsg('Showing summary. Check the left panel.');
-      return;
-    }
-    if (lower.includes('review') || lower.includes('unmatched')) {
-      setActiveTab('review');
-      addAssistantMsg(`Showing ${unmatchedVendors.length} vendors for review. Check the left panel.`);
-      return;
-    }
-    if (lower.includes('export') || lower.includes('report') || lower.includes('download')) {
+    if (lower.includes('upload')) { fileInputRef.current?.click(); return; }
+    if (lower.includes('export') || lower === 'download') {
       setChatMessages(prev => [...prev, {
         role: 'download',
         files: [
-          { name: 'tds_recon_report.xlsx', label: 'TDS Recon Report (Excel — 3 sheets)' },
+          { name: 'tds_recon_report.xlsx', label: 'TDS Recon Report (Excel)' },
           { name: 'reconciliation_report.csv', label: 'Reconciliation Report (CSV)' },
           { name: 'findings_report.csv', label: 'Findings Report (CSV)' },
         ],
       }]);
       return;
     }
-    // Default help
-    addAssistantMsg(
-      'I can help with:\n- **Run reconciliation** \u2014 execute the full pipeline\n- **Upload files** \u2014 attach Form 26 + Tally XLSX\n- **Show matches / findings / summary / review**\n- **Export report**\n\nOr click any action button below.',
-      ['Run Reconciliation', 'Show Matches', 'Show Findings', 'Export Report']
-    );
+
+    // Everything else → send to real LLM chat agent
+    setChatMessages(prev => [...prev, { role: 'assistant', content: null, _streaming: true }]);
+
+    try {
+      const res = await fetch(`${API_URL}${ENDPOINTS.chatStream}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getAuthToken() ? { 'Authorization': `Bearer ${getAuthToken()}` } : {}),
+        },
+        body: JSON.stringify({
+          message: text,
+          company_id: companyId || '',
+          run_id: results?.run_id || '',
+        }),
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === 'chat_token') {
+                accumulated += event.content || '';
+                setChatMessages(prev => {
+                  const updated = [...prev];
+                  const idx = updated.findLastIndex(m => m._streaming);
+                  if (idx >= 0) {
+                    updated[idx] = { role: 'assistant', content: accumulated, _streaming: true };
+                  }
+                  return updated;
+                });
+              } else if (event.type === 'chat_done') {
+                setChatMessages(prev => {
+                  const updated = [...prev];
+                  const idx = updated.findLastIndex(m => m._streaming);
+                  if (idx >= 0) {
+                    updated[idx] = { role: 'assistant', content: accumulated || 'Done.' };
+                  }
+                  return updated;
+                });
+              }
+            } catch {}
+          }
+        }
+      }
+
+      // Stream ended — finalize message
+      setChatMessages(prev => {
+        const updated = [...prev];
+        const idx = updated.findLastIndex(m => m._streaming);
+        if (idx >= 0) {
+          updated[idx] = { role: 'assistant', content: accumulated || 'No response.' };
+        }
+        return updated;
+      });
+    } catch (err) {
+      setChatMessages(prev => {
+        const updated = [...prev];
+        const idx = updated.findLastIndex(m => m._streaming);
+        if (idx >= 0) {
+          updated[idx] = {
+            role: 'assistant',
+            content: 'Chat agent is not available. Use the action buttons below.',
+            actions: ['Run Reconciliation', 'Upload Files'],
+          };
+        }
+        return updated;
+      });
+    }
   };
 
   const sendMessage = () => {
@@ -938,19 +920,13 @@ function TdsRecon({ onBack }) {
           {status === 'running' && (
             <div className="tds-agent-status-line">
               {(() => {
-                let activeAgent = null;
-                for (const e of visibleEvents) {
-                  if (e.type === 'agent_start') activeAgent = e.agent;
-                  if (e.type === 'agent_done' && activeAgent === e.agent) activeAgent = null;
-                }
-                if (!activeAgent) return null;
-                const config = AGENT_CONFIG[activeAgent];
-                const idx = agentThinkingIdx[activeAgent] || 0;
-                const text = config?.thinkingStates?.[idx] || 'Processing...';
+                const lastEvent = visibleEvents[visibleEvents.length - 1];
+                if (!lastEvent) return <span className="tds-status-text">Starting pipeline...</span>;
+                const isLlm = lastEvent.type === 'llm_call';
                 return (
                   <span>
-                    <span className="tds-status-agent">{'\u25D4'} {activeAgent}</span>
-                    <span className="tds-status-text"> {'\u2014'} {text}</span>
+                    <span className="tds-status-agent">{isLlm ? '\uD83D\uDCAD' : '\u25D4'} {lastEvent.agent}</span>
+                    <span className="tds-status-text"> {'\u2014'} {lastEvent.message?.slice(0, 80)}</span>
                   </span>
                 );
               })()}
@@ -974,16 +950,26 @@ function TdsRecon({ onBack }) {
                   <div className="tds-chat-assistant">
                     <div className="tds-chat-avatar">L</div>
                     <div className="tds-chat-assistant-content">
-                      <div className="tds-chat-assistant-bubble">
-                        {msg.content.split('\n').map((line, li) => (
-                          <span key={li}>
-                            {line.replace(/\*\*(.*?)\*\*/g, '\u200B$1').split('\u200B').map((part, pi) =>
-                              pi % 2 === 1 ? <strong key={pi}>{part}</strong> : part
-                            )}
-                            {li < msg.content.split('\n').length - 1 && <br />}
-                          </span>
-                        ))}
-                      </div>
+                      {msg.content === null ? (
+                        <div className="tds-chat-assistant-bubble">
+                          <div className="tds-typing" style={{ margin: 0, padding: 0 }}>
+                            <div className="tds-typing-dot" />
+                            <div className="tds-typing-dot" />
+                            <div className="tds-typing-dot" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="tds-chat-assistant-bubble">
+                          {msg.content.split('\n').map((line, li) => (
+                            <span key={li}>
+                              {line.replace(/\*\*(.*?)\*\*/g, '\u200B$1').split('\u200B').map((part, pi) =>
+                                pi % 2 === 1 ? <strong key={pi}>{part}</strong> : part
+                              )}
+                              {li < msg.content.split('\n').length - 1 && <br />}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {msg.actions && (
                         <div className="tds-chat-actions">
                           {msg.actions.map((a, ai) => (
@@ -1029,9 +1015,6 @@ function TdsRecon({ onBack }) {
                     {eventBlocks.map((block, bi) => {
                       const isDone = block.events.some(e => e.type === 'agent_done');
                       const isActive = !isDone && !block.standalone && status === 'running';
-                      const config = AGENT_CONFIG[block.agent];
-                      const thinkingIdx = agentThinkingIdx[block.agent] || 0;
-                      const thinkingText = config?.thinkingStates?.[thinkingIdx] || null;
 
                       return (
                         <div key={bi} className={`tds-agent-block ${isActive ? 'active' : ''}`}>
@@ -1057,10 +1040,10 @@ function TdsRecon({ onBack }) {
                           </div>
 
                           {/* Thinking indicator while agent is active */}
-                          {isActive && thinkingText && (
+                          {isActive && (
                             <div className="tds-agent-thinking">
                               <div className="tds-agent-thinking-dot" />
-                              <span className="tds-thinking-text">{thinkingText}</span>
+                              <span className="tds-thinking-text">Processing...</span>
                             </div>
                           )}
 
@@ -1168,11 +1151,12 @@ function TdsRecon({ onBack }) {
                           )}
 
                           {/* Completion action chips */}
-                          {isDone && config?.completionActions && (
+                          {isDone && (
                             <div className="tds-agent-actions">
-                              {config.completionActions.map((action, ai) => (
-                                <button key={ai} className="tds-chat-action-chip small" onClick={() => handleActionClick(action)}>{action}</button>
-                              ))}
+                              {block.agent.includes('Parser') && <button className="tds-chat-action-chip small" onClick={() => handleActionClick('Show Summary')}>Show Summary</button>}
+                              {block.agent.includes('Matcher') && <button className="tds-chat-action-chip small" onClick={() => handleActionClick('Show Matches')}>Show Matches</button>}
+                              {block.agent.includes('Checker') && <button className="tds-chat-action-chip small" onClick={() => handleActionClick('View Findings')}>View Findings</button>}
+                              {block.agent.includes('Reporter') && <button className="tds-chat-action-chip small" onClick={() => handleActionClick('Export Report')}>Export Report</button>}
                             </div>
                           )}
                         </div>
