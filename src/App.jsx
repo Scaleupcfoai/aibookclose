@@ -3,6 +3,7 @@ import {
   teamMembers, closePeriod, closeChecklist, phaseConfig,
   reconciliations, journalEntries, trialBalance, fluxData, activityLog
 } from './data/mockData';
+import { useAuth } from './contexts/AuthContext';
 import TdsRecon from './TdsRecon';
 import PaymentRecon from './PaymentRecon';
 import './index.css';
@@ -59,6 +60,7 @@ const priorityColor = (p) => {
 
 // ─── Main App ─────────────────────────────────────────────
 export default function App() {
+  const { user, companies, selectedCompany, setSelectedCompany, signOut } = useAuth();
   const [activeView, setActiveView] = useState('dashboard');
   const [tdsReconActive, setTdsReconActive] = useState(false);
   const [paymentReconActive, setPaymentReconActive] = useState(false);
@@ -299,11 +301,44 @@ export default function App() {
           ))}
         </div>
 
+        {/* Company Selector */}
+        {companies.length > 0 && (
+          <div style={{ padding: '0 8px', marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 4 }}>COMPANY</div>
+            <select
+              className="company-select"
+              value={selectedCompany?.id || ''}
+              onChange={e => {
+                const c = companies.find(c => c.id === e.target.value);
+                if (c) setSelectedCompany(c);
+              }}
+              style={{ width: '100%' }}
+            >
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.company_name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* AI Assistant */}
         <button className="ai-assist-btn" onClick={() => setShowAIPanel(!showAIPanel)}>
           <span className="ai-dot" />
           Lekha AI Assistant
         </button>
+
+        {/* User / Logout */}
+        {user && (
+          <div style={{ padding: '8px', borderTop: '1px solid var(--border)', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</span>
+            <button
+              onClick={signOut}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-sans)' }}
+            >
+              Logout
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* ═══ CENTER PANEL: Main Content ═══ */}

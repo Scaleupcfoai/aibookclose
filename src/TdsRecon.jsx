@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { API_URL, ENDPOINTS } from './config';
 import { api, createAuthSSE } from './services/api';
+import { useAuth } from './contexts/AuthContext';
 import './tds-recon.css';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
@@ -54,7 +55,9 @@ const AGENT_CONFIG = {
   },
 };
 
-function TdsRecon({ onBack, companyId: propCompanyId }) {
+function TdsRecon({ onBack }) {
+  const { selectedCompany } = useAuth();
+  const companyId = selectedCompany?.id || null;
   const [status, setStatus] = useState('idle'); // idle | running | done | error
   const [visibleEvents, setVisibleEvents] = useState([]);
   const [results, setResults] = useState(null);
@@ -64,7 +67,6 @@ function TdsRecon({ onBack, companyId: propCompanyId }) {
   const [runCount, setRunCount] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState({ form26: null, tally: null });
   const [useUpload, setUseUpload] = useState(false);
-  const [companyId, setCompanyId] = useState(propCompanyId || null);
   const [chatMessages, setChatMessages] = useState([
     { role: 'assistant', content: 'Welcome to TDS Reconciliation. I can help you reconcile Form 26 against Tally books.', actions: ['Run Reconciliation', 'Upload Files'] },
   ]);
@@ -78,21 +80,6 @@ function TdsRecon({ onBack, companyId: propCompanyId }) {
   const eventQueueRef = useRef([]);
   const drainTimerRef = useRef(null);
   const pipelineReceivedRef = useRef(false);
-
-  // Auto-fetch first company if none provided
-  useEffect(() => {
-    if (companyId) return;
-    api.get(ENDPOINTS.companies).then(companies => {
-      if (companies?.length > 0) {
-        setCompanyId(companies[0].id);
-        console.log('[TDS] Auto-selected company:', companies[0].id, companies[0].company_name);
-      } else {
-        console.warn('[TDS] No companies found — reconciliation will fail. Create a company first.');
-      }
-    }).catch(err => {
-      console.warn('[TDS] Could not fetch companies:', err.message);
-    });
-  }, [companyId]);
 
   // Auto-scroll chat
   useEffect(() => {
