@@ -45,7 +45,6 @@ const AGENT_CONFIG = {
 
 function TdsRecon({ onBack }) {
   const [status, setStatus] = useState('idle'); // idle | running | done | error
-  const [viewMode, setViewMode] = useState('chat'); // 'chat' = conversation focused, 'data' = table/dashboard focused
   const [visibleEvents, setVisibleEvents] = useState([]);
   const [results, setResults] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
@@ -158,26 +157,22 @@ function TdsRecon({ onBack }) {
     }
     if (lower.includes('match') || lower.includes('tds detail') || lower.includes('show match')) {
       setActiveTab('tds_details');
-      setViewMode('data');
       addAssistantMsg(`Showing ${matches.length} TDS entries with reconciliation status.`);
       return;
     }
     if (lower.includes('finding') || lower.includes('error') || lower.includes('issue') || lower.includes('pending')) {
       setActiveTab('pending');
-      setViewMode('data');
       const pendingCount = findings.filter(f => f.severity === 'error' || f.severity === 'warning').length;
       addAssistantMsg(`Showing ${pendingCount} pending items for review.`);
       return;
     }
     if (lower.includes('summary') || lower.includes('overview')) {
       setActiveTab('summary');
-      setViewMode('data');
       addAssistantMsg('Showing section summary.');
       return;
     }
     if (lower.includes('review') || lower.includes('unmatched')) {
       setActiveTab('review');
-      setViewMode('data');
       addAssistantMsg(`Showing ${unmatchedVendors.length} vendors for review.`);
       return;
     }
@@ -483,7 +478,7 @@ function TdsRecon({ onBack }) {
         </button>
       </div>
 
-      <div className={`tds-stacked ${viewMode}`}>
+      <div className="tds-stacked">
         {/* ── TOP: KPI + Dashboard (expands in data mode) ── */}
         <div className="tds-data-panel">
         <div className="tds-dashboard">
@@ -559,25 +554,25 @@ function TdsRecon({ onBack }) {
                     <div className="tds-kpi-amount">{'\u20B9'}{fmt(summary.amounts?.total_form26_payments || 0)}</div>
                     <div className="tds-kpi-sublabel">Total expenses in books</div>
                   </div>
-                  <div className="tds-kpi-card clickable" onClick={() => { setActiveTab('tds_details'); setViewMode('data'); }}>
+                  <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
                     <div className="tds-kpi-value">{m.total_resolved || 0}</div>
                     <div className="tds-kpi-label">Reconciled</div>
                     <div className="tds-kpi-amount">{'\u20B9'}{fmt(summary.amounts?.matched_payments || 0)}</div>
                     <div className="tds-kpi-sublabel">Expenses reconciled</div>
                   </div>
-                  <div className="tds-kpi-card clickable" onClick={() => { setActiveTab('tds_details'); setViewMode('data'); }}>
+                  <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
                     <div className="tds-kpi-value">{m.matched_with_tds || 0}</div>
                     <div className="tds-kpi-label">TDS Reconciled</div>
                     <div className="tds-kpi-amount">{'\u20B9'}{fmt(summary.amounts?.matched_tds || 0)}</div>
                     <div className="tds-kpi-sublabel">TDS amount reconciled</div>
                   </div>
-                  <div className="tds-kpi-card clickable" onClick={() => { setActiveTab('tds_details'); setViewMode('data'); }}>
+                  <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
                     <div className="tds-kpi-value">{m.below_threshold_resolved || 0}</div>
                     <div className="tds-kpi-label">Expense Exempted</div>
                     <div className="tds-kpi-amount">{'\u20B9'}{fmt((summary.amounts?.total_form26_payments || 0) - (summary.amounts?.matched_payments || 0))}</div>
                     <div className="tds-kpi-sublabel">Exempted expense amount</div>
                   </div>
-                  <div className="tds-kpi-card clickable" onClick={() => { setActiveTab('pending'); setViewMode('data'); }}
+                  <div className="tds-kpi-card clickable" onClick={() => setActiveTab('pending')}
                     style={{ borderColor: (m.unmatched || 0) > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
                     <div className="tds-kpi-value" style={{ color: (m.unmatched || 0) > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>{m.unmatched || 0}</div>
                     <div className="tds-kpi-label">Flagged for Review</div>
@@ -601,13 +596,6 @@ function TdsRecon({ onBack }) {
                      <span>Pending ({findings.filter(f => f.severity === 'error' || f.severity === 'warning').length})<span title="TDS deduction which needs review" style={{ cursor: 'help', marginLeft: 2 }}>*</span></span>}
                   </button>
                 ))}
-                <button
-                  className="tds-tab tds-mode-toggle"
-                  onClick={() => setViewMode(viewMode === 'data' ? 'chat' : 'data')}
-                  title={viewMode === 'data' ? 'Expand conversation' : 'Expand data view'}
-                >
-                  {viewMode === 'data' ? '\u25BC' : '\u25B2'}
-                </button>
               </div>
 
               {/* ── Tab: Section Summary ── */}
