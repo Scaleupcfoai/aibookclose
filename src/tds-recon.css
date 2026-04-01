@@ -73,7 +73,7 @@
   to { transform: rotate(360deg); }
 }
 
-/* Stacked vertical layout — fixed 60/40 split */
+/* Stacked vertical layout */
 .tds-stacked {
   display: flex;
   flex-direction: column;
@@ -82,23 +82,49 @@
   gap: 0;
 }
 
-/* Data panel — KPI + tabs + tables: 60% */
+/* Data panel — KPI + tabs + tables */
 .tds-data-panel {
-  flex: 6;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  transition: flex 0.4s ease;
 }
 
-/* Chat panel: 40% */
+/* Chat panel */
 .tds-chat-panel {
-  flex: 4;
   display: flex;
   flex-direction: column;
   min-height: 0;
   border-top: 2px solid var(--accent, #467273);
   background: rgba(70, 114, 115, 0.02);
+  transition: flex 0.4s ease;
+}
+
+/* During pipeline: KPI auto-height, chat takes 70% */
+.tds-stacked.running .tds-data-panel {
+  flex: 0 0 auto;
+  overflow-y: hidden;
+}
+.tds-stacked.running .tds-chat-panel {
+  flex: 7;
+}
+
+/* After pipeline done: 60/40 split */
+.tds-stacked.done .tds-data-panel {
+  flex: 6;
+}
+.tds-stacked.done .tds-chat-panel {
+  flex: 4;
+}
+
+/* Idle state: same as running — chat dominant */
+.tds-stacked.idle .tds-data-panel {
+  flex: 0 0 auto;
+  overflow-y: hidden;
+}
+.tds-stacked.idle .tds-chat-panel {
+  flex: 7;
 }
 
 /* Chat activity fills its panel */
