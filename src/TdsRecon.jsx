@@ -548,7 +548,7 @@ function TdsRecon({ onBack }) {
                 return (
                 <div className="tds-kpi-row">
                   <div className="tds-kpi-card">
-                    <div className="tds-kpi-value">{m.form26_in_scope || 0}</div>
+                    <div className="tds-kpi-value">{(m.total_resolved || 0) + (m.unmatched || 0)}</div>
                     <div className="tds-kpi-label">Number of GE in Books analysed</div>
                   </div>
                   <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
@@ -588,7 +588,7 @@ function TdsRecon({ onBack }) {
                   >
                     {tab === 'summary' ? 'Section Summary' :
                      tab === 'tds_details' ? `TDS Details (${matches.length})` :
-                     `Pending (${findings.filter(f => f.severity === 'error' || f.severity === 'warning').length})`}
+                     <span>Pending ({findings.filter(f => f.severity === 'error' || f.severity === 'warning').length})<span title="TDS deduction which needs review" style={{ cursor: 'help', marginLeft: 2 }}>*</span></span>}
                   </button>
                 ))}
               </div>
