@@ -749,10 +749,13 @@ function TdsRecon({ onBack }) {
           </div>
           <div className="tds-chat-body" ref={logRef}>
             {/* Chat messages */}
-            {chatMessages.map((msg, mi) => (
+            {chatMessages.map((msg, mi) => {
+              // Is this the last user message?
+              const isLastUser = msg.role === 'user' && mi === chatMessages.findLastIndex(m => m.role === 'user');
+              return (
               <div key={`msg-${mi}`}>
                 {msg.role === 'user' && (
-                  <div className="tds-chat-user">
+                  <div className={`tds-chat-user ${isLastUser ? 'sticky' : ''}`}>
                     <div className="tds-chat-user-bubble">{msg.content}</div>
                   </div>
                 )}
@@ -880,7 +883,7 @@ function TdsRecon({ onBack }) {
                   </div>
                 )}
               </div>
-            ))}
+            )})}
             <div ref={chatEndRef} />
           </div>
 

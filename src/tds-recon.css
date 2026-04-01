@@ -507,6 +507,14 @@
   display: flex;
   justify-content: flex-end;
 }
+.tds-chat-user.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-secondary, #fff);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
 .tds-chat-user-bubble {
   background: var(--accent);
   color: white;
