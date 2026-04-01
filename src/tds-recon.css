@@ -73,16 +73,55 @@
   to { transform: rotate(360deg); }
 }
 
-/* Split panel */
-.tds-split {
-  display: grid;
-  grid-template-columns: 1fr 420px;
-  gap: 20px;
+/* Stacked vertical layout — replaces side-by-side split */
+.tds-stacked {
+  display: flex;
+  flex-direction: column;
   flex: 1;
-  min-height: 0;
+  overflow: hidden;
+  gap: 10px;
 }
 
-/* ── LEFT: Dashboard ── */
+/* Data panel — KPI + tabs + tables */
+.tds-data-panel {
+  transition: flex 0.3s ease, max-height 0.3s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.tds-stacked.chat .tds-data-panel {
+  flex: 0 0 auto;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+.tds-stacked.data .tds-data-panel {
+  flex: 7;
+  max-height: none;
+  overflow-y: auto;
+}
+
+/* Chat panel */
+.tds-chat-panel {
+  transition: flex 0.3s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 100px;
+}
+.tds-stacked.chat .tds-chat-panel {
+  flex: 7;
+}
+.tds-stacked.data .tds-chat-panel {
+  flex: 3;
+}
+
+/* Chat activity fills its panel */
+.tds-chat-panel .tds-activity {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Dashboard ── */
 .tds-dashboard {
   overflow-y: auto;
   padding-right: 4px;
@@ -181,6 +220,14 @@
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+.tds-mode-toggle {
+  margin-left: auto;
+  border-bottom: none;
+  font-size: 10px;
+  padding: 4px 10px;
+  opacity: 0.6;
+}
+.tds-mode-toggle:hover { opacity: 1; }
 
 /* Section accordion */
 .tds-section-group { margin-bottom: 4px; }
