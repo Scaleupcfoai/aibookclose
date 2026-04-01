@@ -102,6 +102,14 @@
   padding: 16px;
   text-align: center;
 }
+.tds-kpi-card.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.tds-kpi-card.clickable:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
 .tds-kpi-value {
   font-size: 28px;
   font-weight: 700;

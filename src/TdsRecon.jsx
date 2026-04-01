@@ -549,29 +549,29 @@ function TdsRecon({ onBack }) {
                 <div className="tds-kpi-row">
                   <div className="tds-kpi-card">
                     <div className="tds-kpi-value">{m.form26_in_scope || 0}</div>
-                    <div className="tds-kpi-label">Entries Analyzed</div>
+                    <div className="tds-kpi-label">Number of GE in Books analysed</div>
                   </div>
-                  <div className="tds-kpi-card">
+                  <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
                     <div className="tds-kpi-value">{m.total_resolved || 0}</div>
-                    <div className="tds-kpi-label">
-                      Reconciled ({m.matched_with_tds || 0} TDS + {m.below_threshold_resolved || 0} exempt)
-                    </div>
+                    <div className="tds-kpi-label">Entries Reconciled</div>
                     <div className="tds-kpi-bar">
                       <div className="tds-kpi-bar-fill" style={{ width: `${m.match_rate_pct || 0}%` }} />
                     </div>
                   </div>
-                  <div className="tds-kpi-card">
+                  <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
                     <div className="tds-kpi-value" style={{ fontSize: 22 }}>
                       {'\u20B9'}{fmt(summary.amounts?.matched_tds || 0)}
                     </div>
                     <div className="tds-kpi-label">Actual TDS Deducted</div>
                   </div>
-                  <div className="tds-kpi-card">
+                  <div className="tds-kpi-card clickable" onClick={() => setActiveTab('pending')}
+                    style={{ borderColor: realExposure > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
                     <div className="tds-kpi-value" style={{ fontSize: 22, color: realExposure > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
                       {'\u20B9'}{fmt(realExposure)}
                     </div>
-                    <div className="tds-kpi-label">
-                      {realExposure > 0 ? 'TDS at Risk (missing/wrong)' : 'No TDS Risk'}
+                    <div className="tds-kpi-label">TDS Variance Flagged for Review</div>
+                    <div style={{ fontSize: 10, color: realExposure > 0 ? 'var(--accent-red)' : 'var(--accent-green)', marginTop: 2 }}>
+                      {realExposure > 0 ? 'Lower TDS deduction (Liability)' : 'Higher TDS deduction (Asset)'}
                     </div>
                   </div>
                 </div>
