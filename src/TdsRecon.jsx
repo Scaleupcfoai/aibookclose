@@ -546,33 +546,37 @@ function TdsRecon({ onBack }) {
                   .filter(f => f.severity === 'error' || f.severity === 'warning')
                   .reduce((sum, f) => sum + (f.aggregate_amount || f.form26_amount || 0), 0);
                 return (
-                <div className="tds-kpi-row">
+                <div className="tds-kpi-row five-col">
                   <div className="tds-kpi-card">
                     <div className="tds-kpi-value">{(m.total_resolved || 0) + (m.unmatched || 0)}</div>
-                    <div className="tds-kpi-label">Number of GE in Books analysed</div>
+                    <div className="tds-kpi-label">GE Analysed</div>
+                    <div className="tds-kpi-amount">{'\u20B9'}{fmt(summary.amounts?.total_form26_payments || 0)}</div>
+                    <div className="tds-kpi-sublabel">Total expenses in books</div>
                   </div>
                   <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
                     <div className="tds-kpi-value">{m.total_resolved || 0}</div>
-                    <div className="tds-kpi-label">Entries Reconciled</div>
-                    <div className="tds-kpi-bar">
-                      <div className="tds-kpi-bar-fill" style={{ width: `${m.match_rate_pct || 0}%` }} />
-                    </div>
+                    <div className="tds-kpi-label">Reconciled</div>
+                    <div className="tds-kpi-amount">{'\u20B9'}{fmt(summary.amounts?.matched_payments || 0)}</div>
+                    <div className="tds-kpi-sublabel">Expenses reconciled</div>
                   </div>
                   <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
-                    <div className="tds-kpi-value" style={{ fontSize: 22 }}>
-                      {'\u20B9'}{fmt(summary.amounts?.matched_tds || 0)}
-                    </div>
-                    <div className="tds-kpi-label">Actual TDS Deducted</div>
+                    <div className="tds-kpi-value">{m.matched_with_tds || 0}</div>
+                    <div className="tds-kpi-label">TDS Reconciled</div>
+                    <div className="tds-kpi-amount">{'\u20B9'}{fmt(summary.amounts?.matched_tds || 0)}</div>
+                    <div className="tds-kpi-sublabel">TDS amount reconciled</div>
+                  </div>
+                  <div className="tds-kpi-card clickable" onClick={() => setActiveTab('tds_details')}>
+                    <div className="tds-kpi-value">{m.below_threshold_resolved || 0}</div>
+                    <div className="tds-kpi-label">Expense Exempted</div>
+                    <div className="tds-kpi-amount">{'\u20B9'}{fmt((summary.amounts?.total_form26_payments || 0) - (summary.amounts?.matched_payments || 0))}</div>
+                    <div className="tds-kpi-sublabel">Exempted expense amount</div>
                   </div>
                   <div className="tds-kpi-card clickable" onClick={() => setActiveTab('pending')}
-                    style={{ borderColor: realExposure > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
-                    <div className="tds-kpi-value" style={{ fontSize: 22, color: realExposure > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
-                      {'\u20B9'}{fmt(realExposure)}
-                    </div>
-                    <div className="tds-kpi-label">TDS Variance Flagged for Review</div>
-                    <div style={{ fontSize: 10, color: realExposure > 0 ? 'var(--accent-red)' : 'var(--accent-green)', marginTop: 2 }}>
-                      {realExposure > 0 ? 'Lower TDS deduction (Liability)' : 'Higher TDS deduction (Asset)'}
-                    </div>
+                    style={{ borderColor: (m.unmatched || 0) > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                    <div className="tds-kpi-value" style={{ color: (m.unmatched || 0) > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>{m.unmatched || 0}</div>
+                    <div className="tds-kpi-label">Flagged for Review</div>
+                    <div className="tds-kpi-amount" style={{ color: (m.unmatched || 0) > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>{'\u20B9'}{fmt(issuesTdsAmount)}</div>
+                    <div className="tds-kpi-sublabel">Amount flagged for review</div>
                   </div>
                 </div>
                 );

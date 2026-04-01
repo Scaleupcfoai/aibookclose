@@ -95,12 +95,29 @@
   gap: 12px;
   margin-bottom: 20px;
 }
+.tds-kpi-row.five-col {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
 .tds-kpi-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 16px;
+  padding: 14px 10px;
   text-align: center;
+}
+.tds-kpi-amount {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.tds-kpi-sublabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 .tds-kpi-card.clickable {
   cursor: pointer;
