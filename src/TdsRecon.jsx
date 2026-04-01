@@ -353,6 +353,7 @@ function TdsRecon({ onBack }) {
   }, [matches]);
 
   const sectionNames = {
+    '192': 'Salary (Form 24Q)',
     '194A': 'Interest (other than Interest on Securities)',
     '194C': 'Contractor / Freight',
     '194H': 'Commission / Brokerage',
@@ -465,7 +466,7 @@ function TdsRecon({ onBack }) {
       <div className="tds-header">
         <div className="tds-header-left">
           <h1>TDS Reconciliation (all sections)</h1>
-          <div className="tds-subtitle">FY 2024-25 | AY 2025-26 | Sections: 194A, 194C, 194H, 194J(b), 194Q</div>
+          <div className="tds-subtitle">FY 2024-25 | AY 2025-26 | Sections: 192, 194A, 194C, 194H, 194J(b), 194Q</div>
         </div>
         <button
           className="tds-run-btn"
