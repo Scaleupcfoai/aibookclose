@@ -318,12 +318,12 @@
 }
 .tds-match-row {
   display: grid;
-  grid-template-columns: 1fr 90px 100px 50px 55px;
+  grid-template-columns: 1fr 80px 80px 46px 40px;
   align-items: center;
-  padding: 4px 12px;
+  padding: 3px 8px;
   border-radius: 4px;
   transition: all 0.15s;
-  gap: 6px;
+  gap: 4px;
 }
 .tds-match-row:hover { background: rgba(70, 114, 115, 0.03); }
 .tds-match-vendor {
@@ -658,22 +658,19 @@
 .tds-chat-download-link {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  gap: 6px;
+  padding: 4px 0;
+  background: none;
+  border: none;
   color: var(--accent);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
   transition: all 0.15s;
 }
 .tds-chat-download-link:hover {
-  background: var(--accent);
-  color: white;
-  border-color: var(--accent);
+  text-decoration: underline;
 }
 .tds-chat-download-icon {
   font-size: 14px;
