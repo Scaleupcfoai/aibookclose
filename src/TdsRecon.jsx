@@ -1017,16 +1017,13 @@ function TdsRecon({ onBack }) {
                 {msg.role === 'download' && (
                   <div className="tds-chat-assistant">
                     <div className="tds-chat-avatar">L</div>
-                    <div className="tds-chat-assistant-content">
-                      <div className="tds-chat-assistant-bubble">Download your reports:</div>
-                      <div className="tds-chat-download-list">
-                        {msg.files.map((f, fi) => (
-                          <a key={fi} className="tds-chat-download-link" href={`${API}/api/download/${f.name}`} download={f.name}>
-                            <span className="tds-chat-download-icon">{'\u2B07'}</span>
-                            {f.label}
-                          </a>
-                        ))}
-                      </div>
+                    <div className="tds-chat-download-list">
+                      {msg.files.map((f, fi) => (
+                        <a key={fi} className="tds-chat-download-link" href={`${API}/api/download/${f.name}`} download={f.name}>
+                          <span className="tds-chat-download-icon">{'\u2B07'}</span>
+                          {f.label}
+                        </a>
+                      ))}
                     </div>
                   </div>
                 )}
