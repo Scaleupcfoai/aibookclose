@@ -43,6 +43,27 @@ const AGENT_CONFIG = {
   },
 };
 
+// LLM thinking states — cycle while waiting for Gemini response
+const LLM_THINKING_STATES = [
+  'Analyzing reconciliation data...',
+  'Checking vendor records...',
+  'Reviewing TDS compliance details...',
+  'Scanning match results...',
+  'Looking up section-wise breakdowns...',
+  'Examining compliance findings...',
+  'Cross-referencing Form 26 entries...',
+  'Evaluating threshold exemptions...',
+  'Reviewing rate validations...',
+  'Checking unmatched transactions...',
+  'Summarizing exposure amounts...',
+  'Parsing vendor PAN details...',
+  'Correlating Tally journal entries...',
+  'Assessing missing TDS entries...',
+  'Reviewing fuzzy name matches...',
+  'Calculating section-wise TDS totals...',
+  'Preparing response...',
+];
+
 function TdsRecon({ onBack }) {
   const [status, setStatus] = useState('idle'); // idle | running | done | error
   const [visibleEvents, setVisibleEvents] = useState([]);
@@ -61,6 +82,8 @@ function TdsRecon({ onBack }) {
   const [columnPreview, setColumnPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [filesPreviewedOnServer, setFilesPreviewedOnServer] = useState(false);
+  const [llmThinking, setLlmThinking] = useState(false);
+  const [llmThinkingIdx, setLlmThinkingIdx] = useState(0);
   const logRef = useRef(null);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -70,7 +93,16 @@ function TdsRecon({ onBack }) {
   // Auto-scroll chat
   useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, visibleEvents, agentThinkingIdx]);
+  }, [chatMessages, visibleEvents, agentThinkingIdx, llmThinkingIdx]);
+
+  // Cycle LLM thinking states while waiting for response
+  useEffect(() => {
+    if (!llmThinking) return;
+    const interval = setInterval(() => {
+      setLlmThinkingIdx(prev => (prev + 1) % LLM_THINKING_STATES.length);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [llmThinking]);
 
   // Cycle thinking states for the currently active agent
   useEffect(() => {
@@ -210,11 +242,39 @@ function TdsRecon({ onBack }) {
       }]);
       return;
     }
-    // Default help
-    addAssistantMsg(
-      'I can help with:\n- **Run reconciliation** \u2014 execute the full pipeline\n- **Upload files** \u2014 attach Form 26 + Tally XLSX\n- **Show matches / findings / summary / review**\n- **Export report**\n\nOr click any action button below.',
-      ['Run Reconciliation', 'Show Matches', 'Show Findings', 'Export Report']
-    );
+    // Default: send to LLM
+    askLlm(text);
+  };
+
+  const askLlm = async (question) => {
+    setLlmThinking(true);
+    setLlmThinkingIdx(0);
+    try {
+      // Build history from recent chat messages (last 10 user/assistant pairs)
+      const history = chatMessages
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .slice(-10)
+        .map(m => ({ role: m.role, content: m.content || '' }));
+
+      const res = await fetch(`${API}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: question, history }),
+      });
+      const data = await res.json();
+      setLlmThinking(false);
+
+      if (data.response) {
+        addAssistantMsg(data.response);
+      } else {
+        addAssistantMsg('I couldn\'t process that question. Try asking about specific vendors, sections, or TDS amounts.',
+          ['Show Matches', 'Show Findings', 'Export Report']);
+      }
+    } catch (err) {
+      setLlmThinking(false);
+      addAssistantMsg('I\'m having trouble connecting to my AI backend. You can still explore the data using the buttons below.',
+        ['Show Matches', 'Show Findings', 'Show Summary', 'Export Report']);
+    }
   };
 
   const sendMessage = () => {
@@ -298,10 +358,13 @@ function TdsRecon({ onBack }) {
     setVisibleEvents([]);
     setReviewDecisions({});
     setResults(null);
+    // Clear chat history for fresh run — LLM context is rebuilt from new results
+    setChatMessages([
+      { role: 'assistant', content: 'Starting reconciliation pipeline. Running 4 agents: Parser \u2192 Matcher \u2192 TDS Checker \u2192 Reporter...' },
+    ]);
     // Clear any pending drip-feed from previous run
     eventQueueRef.current = [];
     if (drainTimerRef.current) { clearTimeout(drainTimerRef.current); drainTimerRef.current = null; }
-    addAssistantMsg('Starting reconciliation pipeline. Running 4 agents: Parser \u2192 Matcher \u2192 TDS Checker \u2192 Reporter...');
 
     // If user uploaded files, upload them first (skip if already saved via preview)
     let streamUrl = `${API}/api/run/stream`;
@@ -1100,6 +1163,18 @@ function TdsRecon({ onBack }) {
                 )}
               </div>
             )})}
+            {/* LLM thinking indicator */}
+            {llmThinking && (
+              <div className="tds-chat-assistant">
+                <div className="tds-chat-avatar">L</div>
+                <div className="tds-chat-assistant-content">
+                  <div className="tds-llm-thinking">
+                    <div className="tds-agent-thinking-dot" />
+                    <span className="tds-thinking-text">{LLM_THINKING_STATES[llmThinkingIdx]}</span>
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={chatEndRef} />
           </div>
 

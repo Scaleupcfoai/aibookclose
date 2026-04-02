@@ -1052,3 +1052,14 @@
   color: var(--text-secondary);
   padding: 1px 0;
 }
+
+/* ── LLM Thinking Indicator ── */
+.tds-llm-thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
