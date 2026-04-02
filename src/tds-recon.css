@@ -91,13 +91,13 @@
   transition: flex 0.4s ease;
 }
 
-/* Chat panel */
+/* Chat panel — "Lekha Spine" */
 .tds-chat-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-top: 2px solid var(--accent, #467273);
-  background: rgba(70, 114, 115, 0.02);
+  border-top: 1px solid rgba(70, 114, 115, 0.15);
+  background: #f6f8f9;
   transition: flex 0.4s ease;
 }
 
@@ -131,9 +131,15 @@
 .tds-chat-panel .tds-activity {
   flex: 1;
   overflow: hidden;
-  background: transparent;
+  background: #f6f8f9;
   border: none;
   border-radius: 0;
+}
+.tds-chat-panel .tds-activity-header {
+  background: #f6f8f9;
+}
+.tds-chat-panel .tds-chat-body {
+  background: #f6f8f9;
 }
 
 /* ── Dashboard ── */
@@ -142,31 +148,48 @@
   padding-right: 4px;
 }
 
-/* KPI Cards */
+/* KPI Cards — Unified glass-morphism bar */
 .tds-kpi-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 .tds-kpi-row.five-col {
   grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
+  background: rgba(70, 114, 115, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(70, 114, 115, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
 }
 .tds-kpi-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 10px;
   padding: 14px 10px;
   text-align: center;
+  border-right: 1px solid rgba(70, 114, 115, 0.1);
+  background: transparent;
+  border-radius: 0;
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+}
+.tds-kpi-card:last-child {
+  border-right: none;
+}
+.tds-kpi-value {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -0.5px;
 }
 .tds-kpi-amount {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(70, 114, 115, 0.08);
 }
 .tds-kpi-sublabel {
   font-size: 10px;
@@ -470,13 +493,22 @@
   z-index: 1;
 }
 .tds-activity-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--accent-green);
-  animation: pulse 2s infinite;
+  animation: agent-glow 2s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
 }
-.tds-activity-dot.idle { background: var(--text-muted); animation: none; }
+.tds-activity-dot.idle {
+  background: var(--text-muted);
+  animation: none;
+  box-shadow: none;
+}
+@keyframes agent-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(34, 197, 94, 0.3); }
+  50% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.6), 0 0 20px rgba(34, 197, 94, 0.2); }
+}
 
 .tds-activity-log {
   padding: 12px 16px;
@@ -511,9 +543,9 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: rgba(70, 114, 115, 0.02);
+  background: #f6f8f9;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(70, 114, 115, 0.1);
 }
 .tds-chat-user-bubble {
   background: var(--accent);
@@ -552,11 +584,16 @@
   max-width: 85%;
 }
 .tds-chat-assistant-bubble {
-  background: var(--bg-tertiary);
+  background: #fff;
   padding: 10px 14px;
   border-radius: 4px 16px 16px 16px;
   font-size: 13px;
   line-height: 1.6;
+  border: 1px solid rgba(70, 114, 115, 0.08);
+}
+/* Glow on latest AI response */
+.tds-chat-assistant:last-of-type .tds-chat-assistant-bubble {
+  box-shadow: 0 0 12px rgba(70, 114, 115, 0.12), 0 1px 3px rgba(0,0,0,0.04);
   color: var(--text-primary);
 }
 
