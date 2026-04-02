@@ -109,12 +109,11 @@ function TdsRecon({ onBack }) {
         setStatus('done');
         const s = item.results?.reconciliation_summary;
         if (s) {
-          const m = s.matching || {};
-          const c = s.compliance || {};
+          const insight = buildProactiveInsight(s, item.results?.checker_results, item.results?.match_results);
           setChatMessages(prev => [...prev, {
             role: 'assistant',
-            content: `Reconciliation complete!\n\n**${m.total_resolved || 0} entries reconciled** (${m.matched_with_tds || 0} with TDS + ${m.below_threshold_resolved || 0} exempt)\n**${c.total_findings || 0} findings** (${c.errors || 0} errors, ${c.warnings || 0} warnings)\n**\u20B9${fmt(c.missing_tds_exposure || 0)}** missing TDS exposure\n\nWhat would you like to explore?`,
-            actions: ['Show Summary', 'Show Matches', 'View Findings', 'Export Report'],
+            content: insight.message,
+            actions: insight.actions,
           }]);
         }
         drainTimerRef.current = null;
@@ -155,15 +154,32 @@ function TdsRecon({ onBack }) {
       fileInputRef.current?.click();
       return;
     }
-    if (lower.includes('match') || lower.includes('tds detail') || lower.includes('show match')) {
+    if (lower.includes('discrepanc') || lower.includes('finding') || lower.includes('error') || lower.includes('issue') || lower.includes('pending')) {
+      setActiveTab('pending');
+      const pendingCount = findings.filter(f => f.severity === 'error' || f.severity === 'warning').length;
+      addAssistantMsg(`Showing ${pendingCount} pending items for review.`);
+      return;
+    }
+    if (lower.includes('reconciled entr') || lower.includes('explore') || lower.includes('match') || lower.includes('tds detail') || lower.includes('show match')) {
       setActiveTab('tds_details');
       addAssistantMsg(`Showing ${matches.length} TDS entries with reconciliation status.`);
       return;
     }
-    if (lower.includes('finding') || lower.includes('error') || lower.includes('issue') || lower.includes('pending')) {
-      setActiveTab('pending');
-      const pendingCount = findings.filter(f => f.severity === 'error' || f.severity === 'warning').length;
-      addAssistantMsg(`Showing ${pendingCount} pending items for review.`);
+    if (lower.includes('name mismatch') || lower.includes('fuzzy') || lower.includes('name')) {
+      setActiveTab('tds_details');
+      const fuzzyMatches = matches.filter(m => m.pass_name?.includes('fuzzy'));
+      addAssistantMsg(`${fuzzyMatches.length} entries matched via fuzzy name matching. These are shown in TDS Details — look for entries marked "Fuzzy".`);
+      return;
+    }
+    if (lower.includes('remediation') || lower.includes('memo')) {
+      setChatMessages(prev => [...prev, {
+        role: 'download',
+        files: [
+          { name: 'tds_recon_report.xlsx', label: 'TDS Recon Report (Excel — 3 sheets)' },
+          { name: 'findings_report.csv', label: 'Findings Report with Remediation' },
+        ],
+      }]);
+      addAssistantMsg('Remediation details are included in the findings report — each issue has a recommended action per Income Tax Act provisions.');
       return;
     }
     if (lower.includes('summary') || lower.includes('overview')) {
@@ -455,6 +471,71 @@ function TdsRecon({ onBack }) {
   };
 
   const pendingReviewCount = Object.values(reviewDecisions).filter(d => d.decision).length;
+
+  // Build proactive insight message from pipeline results
+  const buildProactiveInsight = (summary, checkerResults, matchResults) => {
+    const m = summary.matching || {};
+    const c = summary.compliance || {};
+    const sw = summary.section_wise || {};
+    const findings = checkerResults?.findings || [];
+    const actions = ['Review Discrepancies', 'Explore Reconciled Entries', 'Review Name Mismatches', 'Generate Remediation Memo'];
+
+    const lines = [];
+    lines.push(`**Reconciliation complete — ${m.total_resolved || 0} entries reconciled.**`);
+    lines.push('');
+
+    // Highlight key stats
+    lines.push(`${m.matched_with_tds || 0} entries matched with TDS deductions, ${m.below_threshold_resolved || 0} below-threshold entries exempted.`);
+
+    // Unmatched entries — name them
+    const unmatched = m.unmatched || 0;
+    if (unmatched > 0) {
+      const unmatchedEntries = matchResults?.unmatched_form26 || [];
+      const vendorSet = new Set(unmatchedEntries.map(e => e.vendor_name));
+      const vendors = [...vendorSet].slice(0, 3).join(', ');
+      const more = vendorSet.size > 3 ? ` and ${vendorSet.size - 3} more` : '';
+      lines.push('');
+      lines.push(`**${unmatched} entries could not be matched** — ${vendors}${more}. These need manual verification.`);
+    }
+
+    // Compliance findings — be specific
+    const warnings = findings.filter(f => f.severity === 'warning');
+    const errors = findings.filter(f => f.severity === 'error');
+    const missingTds = findings.filter(f => f.check === 'missing_tds');
+    const sectionIssues = findings.filter(f => f.check === 'section_validation' && f.severity === 'warning');
+
+    if (missingTds.length > 0) {
+      lines.push('');
+      const vendors = missingTds.map(f => `**${f.vendor}** (\u20B9${fmt(f.aggregate_amount || 0)})`).join(', ');
+      lines.push(`${missingTds.length} vendor(s) with potential missing TDS: ${vendors}. ${missingTds.some(f => f.needs_review) ? 'Flagged for your review — may include year-end adjustments.' : ''}`);
+    }
+
+    if (sectionIssues.length > 0) {
+      const ambigVendors = new Set(sectionIssues.map(f => f.vendor));
+      lines.push('');
+      lines.push(`${sectionIssues.length} section classification(s) are ambiguous across ${ambigVendors.size} vendor(s) — verify invoice nature to confirm correct TDS section.`);
+    }
+
+    // Section with partial match
+    for (const [sec, data] of Object.entries(sw)) {
+      if (data.matched_count < data.form26_count && data.form26_count > 0) {
+        lines.push('');
+        lines.push(`Section ${sec}: ${data.matched_count}/${data.form26_count} matched — \u20B9${fmt(data.form26_amount - data.matched_amount)} unreconciled.`);
+      }
+    }
+
+    // Fuzzy matches — name mismatch indicator
+    const fuzzyCount = (m.by_pass?.fuzzy_match || 0);
+    if (fuzzyCount > 0) {
+      lines.push('');
+      lines.push(`${fuzzyCount} entries matched via fuzzy name matching — names differ between Form 26 and Tally. Worth reviewing for accuracy.`);
+    }
+
+    lines.push('');
+    lines.push('What would you like to do next?');
+
+    return { message: lines.join('\n'), actions };
+  };
 
   // ═══ RENDER ═══
   return (
