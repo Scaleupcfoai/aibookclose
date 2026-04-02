@@ -238,8 +238,8 @@
 .tds-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(70, 114, 115, 0.1);
+  margin-bottom: 12px;
 }
 .tds-tab {
   padding: 8px 16px;
@@ -260,21 +260,29 @@
 }
 
 /* Section accordion */
-.tds-section-group { margin-bottom: 4px; }
+.tds-section-group {
+  margin-bottom: 2px;
+  border-left: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+.tds-section-group:hover {
+  border-left-color: var(--accent, #467273);
+}
 .tds-section-header {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: #fff;
+  border: none;
+  border-bottom: 1px solid rgba(70, 114, 115, 0.06);
+  border-radius: 0;
   cursor: pointer;
   transition: all 0.15s;
   width: 100%;
   font-family: var(--font-sans);
 }
-.tds-section-header:hover { background: var(--bg-tertiary); }
+.tds-section-header:hover { background: rgba(70, 114, 115, 0.03); }
 .tds-section-chevron {
   font-size: 10px;
   color: var(--text-muted);
@@ -298,12 +306,16 @@
   padding: 2px 8px;
   border-radius: 10px;
 }
-.tds-section-status-badge.matched { background: rgba(22,163,74,0.1); color: var(--accent-green); }
-.tds-section-status-badge.pending { background: rgba(151,160,175,0.15); color: var(--text-muted); }
-.tds-section-status-badge.issue { background: rgba(220,38,38,0.1); color: var(--accent-red); }
+.tds-section-status-badge.matched { background: rgba(22,163,74,0.08); color: var(--accent-green); }
+.tds-section-status-badge.pending { background: rgba(151,160,175,0.1); color: var(--text-muted); }
+.tds-section-status-badge.issue { background: rgba(220,38,38,0.08); color: var(--accent-red); }
 
 /* Match rows */
-.tds-section-body { padding: 4px 0 4px 12px; }
+.tds-section-body {
+  padding: 4px 0 4px 14px;
+  background: #fff;
+  border-bottom: 1px solid rgba(70, 114, 115, 0.06);
+}
 .tds-match-row {
   display: grid;
   grid-template-columns: 1fr 80px 90px 80px;
