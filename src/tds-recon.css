@@ -957,3 +957,101 @@
   max-width: 300px;
   line-height: 1.5;
 }
+
+/* ── Column Preview Card ── */
+.tds-preview-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tds-preview-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.tds-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+.tds-preview-file-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tds-preview-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.tds-preview-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.tds-preview-section-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(70, 114, 115, 0.1);
+  color: var(--accent);
+}
+.tds-preview-error {
+  font-size: 11px;
+  color: var(--accent-red);
+  padding: 4px 8px;
+}
+.tds-preview-registers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tds-preview-register-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.tds-preview-register-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.tds-preview-register-count,
+.tds-preview-register-cols {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.tds-preview-sample {
+  margin-top: 4px;
+  font-size: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+.tds-preview-sample-header {
+  display: grid;
+  grid-template-columns: 1fr 50px 70px 60px;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding-bottom: 2px;
+}
+.tds-preview-sample-row {
+  display: grid;
+  grid-template-columns: 1fr 50px 70px 60px;
+  gap: 4px;
+  color: var(--text-secondary);
+  padding: 1px 0;
+}

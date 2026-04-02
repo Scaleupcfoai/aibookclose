@@ -58,6 +58,9 @@ function TdsRecon({ onBack }) {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [agentThinkingIdx, setAgentThinkingIdx] = useState({});
+  const [columnPreview, setColumnPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [filesPreviewedOnServer, setFilesPreviewedOnServer] = useState(false);
   const logRef = useRef(null);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -146,7 +149,7 @@ function TdsRecon({ onBack }) {
   const handleCommand = (text) => {
     const lower = text.toLowerCase().trim();
 
-    if (lower.includes('run') || lower.includes('start') || lower.includes('reconcil')) {
+    if (lower.includes('confirm') || lower.includes('run') || lower.includes('start') || lower.includes('reconcil')) {
       runPipeline();
       return;
     }
@@ -223,7 +226,7 @@ function TdsRecon({ onBack }) {
     handleCommand(action);
   };
 
-  const handleFilesDrop = (files) => {
+  const handleFilesDrop = async (files) => {
     const fileArr = Array.from(files);
     if (fileArr.length >= 2) {
       setUploadedFiles({ form26: fileArr[0], tally: fileArr[1] });
@@ -232,7 +235,25 @@ function TdsRecon({ onBack }) {
         role: 'file-upload',
         files: [{ name: fileArr[0]?.name || 'File 1', label: 'Form 26' }, { name: fileArr[1]?.name || 'File 2', label: 'Tally' }],
       }]);
-      addAssistantMsg('Files attached! Ready to parse and reconcile.', ['Upload & Run']);
+
+      // Call preview-columns to show confirmation before running pipeline
+      setPreviewLoading(true);
+      addAssistantMsg('Analyzing your files...');
+      try {
+        const formData = new FormData();
+        formData.append('form26', fileArr[0]);
+        formData.append('tally', fileArr[1]);
+        const res = await fetch(`${API}/api/preview-columns`, { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Preview failed');
+        const preview = await res.json();
+        setColumnPreview(preview);
+        setFilesPreviewedOnServer(true);
+        setPreviewLoading(false);
+        setChatMessages(prev => [...prev, { role: 'column-preview', preview }]);
+      } catch (err) {
+        setPreviewLoading(false);
+        addAssistantMsg('Could not preview files. You can still run the pipeline directly.', ['Upload & Run']);
+      }
     } else if (fileArr.length === 1) {
       addAssistantMsg('Please attach both Form 26 and Tally files. You can drag-drop them together.');
     }
@@ -249,20 +270,25 @@ function TdsRecon({ onBack }) {
     if (drainTimerRef.current) { clearTimeout(drainTimerRef.current); drainTimerRef.current = null; }
     addAssistantMsg('Starting reconciliation pipeline. Running 4 agents: Parser \u2192 Matcher \u2192 TDS Checker \u2192 Reporter...');
 
-    // If user uploaded files, upload them first
+    // If user uploaded files, upload them first (skip if already saved via preview)
     let streamUrl = `${API}/api/run/stream`;
     if (useUpload && uploadedFiles.form26 && uploadedFiles.tally) {
-      try {
-        const formData = new FormData();
-        formData.append('form26', uploadedFiles.form26);
-        formData.append('tally', uploadedFiles.tally);
-        const uploadRes = await fetch(`${API}/api/upload`, { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Upload failed');
+      if (filesPreviewedOnServer) {
+        // Files already saved to disk by /api/preview-columns — skip re-upload
         streamUrl = `${API}/api/run/stream/upload`;
-      } catch (err) {
-        setVisibleEvents([{ agent: 'Upload', type: 'error', message: `Upload failed: ${err.message}` }]);
-        setStatus('error');
-        return;
+      } else {
+        try {
+          const formData = new FormData();
+          formData.append('form26', uploadedFiles.form26);
+          formData.append('tally', uploadedFiles.tally);
+          const uploadRes = await fetch(`${API}/api/upload`, { method: 'POST', body: formData });
+          if (!uploadRes.ok) throw new Error('Upload failed');
+          streamUrl = `${API}/api/run/stream/upload`;
+        } catch (err) {
+          setVisibleEvents([{ agent: 'Upload', type: 'error', message: `Upload failed: ${err.message}` }]);
+          setStatus('error');
+          return;
+        }
       }
     }
 
@@ -873,6 +899,84 @@ function TdsRecon({ onBack }) {
                           <span>{f.label}: {f.name}</span>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+                {msg.role === 'column-preview' && msg.preview && (
+                  <div className="tds-chat-assistant">
+                    <div className="tds-chat-avatar">L</div>
+                    <div className="tds-chat-assistant-content">
+                      <div className="tds-preview-card">
+                        <div className="tds-preview-title">File Analysis Complete</div>
+
+                        {/* Form 26 summary */}
+                        {msg.preview.form26 && !msg.preview.form26.error && (
+                          <div className="tds-preview-section">
+                            <div className="tds-preview-file-label">{'\uD83D\uDCC4'} {msg.preview.form26.filename}</div>
+                            <div className="tds-preview-meta">
+                              Sheet: <strong>{msg.preview.form26.detected_sheet}</strong> | {msg.preview.form26.total_entries} entries
+                            </div>
+                            <div className="tds-preview-sections">
+                              {Object.entries(msg.preview.form26.sections || {}).map(([sec, count]) => (
+                                <span key={sec} className="tds-preview-section-badge">{sec}: {count}</span>
+                              ))}
+                            </div>
+                            {msg.preview.form26.sample_rows?.length > 0 && (
+                              <div className="tds-preview-sample">
+                                <div className="tds-preview-sample-header">
+                                  <span>Vendor</span><span>Section</span><span>Amount</span><span>TDS</span>
+                                </div>
+                                {msg.preview.form26.sample_rows.map((r, ri) => (
+                                  <div key={ri} className="tds-preview-sample-row">
+                                    <span>{r.vendor}</span>
+                                    <span>{r.section}</span>
+                                    <span>{'\u20B9'}{fmt(r.amount || 0)}</span>
+                                    <span>{'\u20B9'}{fmt(r.tax_deducted || 0)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {msg.preview.form26?.error && (
+                          <div className="tds-preview-error">{'\u26A0'} Form 26: {msg.preview.form26.error}</div>
+                        )}
+
+                        {/* Tally summary */}
+                        {msg.preview.tally && !msg.preview.tally.error && (
+                          <div className="tds-preview-section">
+                            <div className="tds-preview-file-label">{'\uD83D\uDCC4'} {msg.preview.tally.filename}</div>
+                            <div className="tds-preview-meta">
+                              {msg.preview.tally.sheet_names?.length} registers found
+                            </div>
+                            <div className="tds-preview-registers">
+                              {Object.entries(msg.preview.tally.registers || {}).map(([name, info]) => (
+                                <div key={name} className="tds-preview-register-row">
+                                  <span className="tds-preview-register-name">{name}</span>
+                                  <span className="tds-preview-register-count">{info.entry_count} entries</span>
+                                  <span className="tds-preview-register-cols">{info.headers?.length} columns</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {msg.preview.tally?.error && (
+                          <div className="tds-preview-error">{'\u26A0'} Tally: {msg.preview.tally.error}</div>
+                        )}
+
+                        {/* Form 24 if present */}
+                        {msg.preview.form24 && !msg.preview.form24.error && (
+                          <div className="tds-preview-section">
+                            <div className="tds-preview-file-label">{'\uD83D\uDCC4'} {msg.preview.form24.filename}</div>
+                            <div className="tds-preview-meta">
+                              {msg.preview.form24.total_entries} entries | {msg.preview.form24.section}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="tds-chat-actions">
+                        <button className="tds-chat-action-chip" onClick={() => handleActionClick('Confirm & Run')}>Confirm & Run</button>
+                      </div>
                     </div>
                   </div>
                 )}
