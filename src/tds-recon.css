@@ -318,14 +318,14 @@
 }
 .tds-match-row {
   display: grid;
-  grid-template-columns: 1fr 80px 90px 80px;
+  grid-template-columns: 1fr 90px 100px 50px 55px;
   align-items: center;
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: 4px 12px;
+  border-radius: 4px;
   transition: all 0.15s;
-  gap: 8px;
+  gap: 6px;
 }
-.tds-match-row:hover { background: var(--bg-secondary); }
+.tds-match-row:hover { background: rgba(70, 114, 115, 0.03); }
 .tds-match-vendor {
   font-size: 13px;
   color: var(--text-primary);
@@ -353,7 +353,7 @@
 .tds-match-type.aggregated { background: rgba(124,58,237,0.1); color: var(--accent-purple); }
 .tds-match-type.gst { background: rgba(202,138,4,0.1); color: var(--accent-yellow); }
 .tds-match-confidence {
-  font-size: 12px;
+  font-size: 11px;
   font-family: var(--font-mono);
   text-align: right;
 }
