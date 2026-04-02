@@ -149,8 +149,12 @@ function TdsRecon({ onBack }) {
   const handleCommand = (text) => {
     const lower = text.toLowerCase().trim();
 
-    if (lower.includes('confirm') || lower.includes('run') || lower.includes('start') || lower.includes('reconcil')) {
+    if (lower.includes('confirm & run') || lower.includes('confirm and run')) {
       runPipeline();
+      return;
+    }
+    if (lower.includes('run') || lower.includes('start') || lower.includes('reconcil')) {
+      previewAndConfirm();
       return;
     }
     if (lower.includes('upload')) {
@@ -226,23 +230,32 @@ function TdsRecon({ onBack }) {
     handleCommand(action);
   };
 
-  const handleFilesDrop = async (files) => {
+  const handleFilesDrop = (files) => {
     const fileArr = Array.from(files);
     if (fileArr.length >= 2) {
       setUploadedFiles({ form26: fileArr[0], tally: fileArr[1] });
       setUseUpload(true);
+      setFilesPreviewedOnServer(false);
       setChatMessages(prev => [...prev, {
         role: 'file-upload',
         files: [{ name: fileArr[0]?.name || 'File 1', label: 'Form 26' }, { name: fileArr[1]?.name || 'File 2', label: 'Tally' }],
       }]);
+      addAssistantMsg('Files attached! Click Run or type "run" to analyze and reconcile.', ['Run Reconciliation']);
+    } else if (fileArr.length === 1) {
+      addAssistantMsg('Please attach both Form 26 and Tally files. You can drag-drop them together.');
+    }
+  };
 
-      // Call preview-columns to show confirmation before running pipeline
+  // Show column preview before running pipeline
+  const previewAndConfirm = async () => {
+    if (useUpload && uploadedFiles.form26 && uploadedFiles.tally) {
+      // Upload flow — preview via POST with files
       setPreviewLoading(true);
       addAssistantMsg('Analyzing your files...');
       try {
         const formData = new FormData();
-        formData.append('form26', fileArr[0]);
-        formData.append('tally', fileArr[1]);
+        formData.append('form26', uploadedFiles.form26);
+        formData.append('tally', uploadedFiles.tally);
         const res = await fetch(`${API}/api/preview-columns`, { method: 'POST', body: formData });
         if (!res.ok) throw new Error('Preview failed');
         const preview = await res.json();
@@ -252,10 +265,30 @@ function TdsRecon({ onBack }) {
         setChatMessages(prev => [...prev, { role: 'column-preview', preview }]);
       } catch (err) {
         setPreviewLoading(false);
-        addAssistantMsg('Could not preview files. You can still run the pipeline directly.', ['Upload & Run']);
+        addAssistantMsg('Could not preview files. Running pipeline directly...');
+        runPipeline();
       }
-    } else if (fileArr.length === 1) {
-      addAssistantMsg('Please attach both Form 26 and Tally files. You can drag-drop them together.');
+    } else {
+      // Existing data flow — preview from parsed files on server
+      setPreviewLoading(true);
+      addAssistantMsg('Analyzing existing data...');
+      try {
+        const res = await fetch(`${API}/api/preview-columns/existing`);
+        if (!res.ok) throw new Error('Preview failed');
+        const preview = await res.json();
+        if (preview.form26?.error && preview.tally?.error) {
+          setPreviewLoading(false);
+          addAssistantMsg('No data found on server. Please upload Form 26 and Tally files first.', ['Upload Files']);
+          return;
+        }
+        setColumnPreview(preview);
+        setPreviewLoading(false);
+        setChatMessages(prev => [...prev, { role: 'column-preview', preview }]);
+      } catch (err) {
+        setPreviewLoading(false);
+        addAssistantMsg('Could not preview data. Running pipeline directly...');
+        runPipeline();
+      }
     }
   };
 
@@ -577,10 +610,11 @@ function TdsRecon({ onBack }) {
         </div>
         <button
           className="tds-run-btn"
-          onClick={runPipeline}
-          disabled={status === 'running' || (useUpload && (!uploadedFiles.form26 || !uploadedFiles.tally))}
+          onClick={previewAndConfirm}
+          disabled={status === 'running' || previewLoading || (useUpload && (!uploadedFiles.form26 || !uploadedFiles.tally))}
         >
           {status === 'running' ? <><span className="spinner"></span> Running...</> :
+           previewLoading ? 'Analyzing...' :
            useUpload ? 'Upload & Run' : 'Run Reconciliation'}
         </button>
       </div>
