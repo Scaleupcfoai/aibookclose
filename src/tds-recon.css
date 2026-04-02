@@ -507,12 +507,12 @@
   display: flex;
   justify-content: flex-end;
 }
-.tds-chat-user.sticky {
+.tds-sticky-msg {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--bg-secondary, #fff);
-  padding: 8px 0;
+  background: rgba(70, 114, 115, 0.02);
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
 .tds-chat-user-bubble {
