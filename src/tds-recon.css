@@ -963,6 +963,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 340px;
 }
 .tds-preview-title {
   font-size: 13px;
