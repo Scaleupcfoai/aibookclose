@@ -555,9 +555,8 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #f6f8f9;
+  background: transparent;
   padding-bottom: 6px;
-  border-bottom: 1px solid rgba(70, 114, 115, 0.1);
 }
 .tds-chat-user-bubble {
   background: var(--accent);
