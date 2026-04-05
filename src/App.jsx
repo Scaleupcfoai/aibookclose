@@ -621,13 +621,10 @@ export default function App() {
                   className="rtile-card rtile-card-full"
                   onClick={() => tile.id === 'tds-26q' ? setTdsReconActive(true) : console.log('tile:', tile.id)}
                 >
-                  {/* Row 1: Domain + Status badges */}
+                  {/* Row 1: Domain badge only */}
                   <div className="rtile-row-badges">
                     <span className="rtile-domain-badge" style={{ background: domainColor.bg, color: domainColor.text }}>
                       {tile.domain.replace('_', ' ')}
-                    </span>
-                    <span className="rtile-status-badge" style={{ background: statusColor.bg, color: statusColor.text }}>
-                      {tile.status}
                     </span>
                   </div>
 
@@ -635,8 +632,7 @@ export default function App() {
                   <div className="rtile-title">{tile.title}</div>
                   <div className="rtile-meta">
                     <span className="rtile-recon-type">{tile.recon_type}</span>
-                    <span className="rtile-compliance-dot" style={{ background: tile.compliance === 'Regulatory' ? '#DC2626' : '#9CA3AF' }}
-                      title={tile.compliance} />
+                    <span className="rtile-compliance-dot" title={tile.compliance} />
                     <span className="rtile-compliance-label">{tile.compliance}</span>
                   </div>
 
@@ -668,8 +664,7 @@ export default function App() {
                   {/* Divider + Footer */}
                   <div className="rtile-divider" />
                   <div className="rtile-footer">
-                    <div className="rtile-avatar" style={{ background: assignee?.bg || '#6B7280' }}
-                      title={assignee?.name}>
+                    <div className="rtile-avatar" title={assignee?.name}>
                       {tile.assignee}
                     </div>
                     <span className="rtile-items">{tile.items_open > 0 ? `${tile.items_open} items` : 'No items'}</span>
