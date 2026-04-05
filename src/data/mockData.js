@@ -92,66 +92,70 @@ export const closeChecklist = [
     reviewer: 'u2', reviewStatus: 'approved', priority: 'critical',
   },
 
-  // Phase 3: Reconciliations (15 recon tasks matching reconTiles)
+  // Phase 3: Reconciliations (15 tasks — Revenue → Expense → Tax → Balance Sheet)
+  // ── Revenue ──
   {
-    id: 't13', phase: 'reconciliation', task: 'TDS — 26Q vs Books (Vendor Payments)',
-    owner: 'u3', dueDate: '2026-05-15', status: 'in_progress', completedAt: null,
-    reviewer: 'u2', reviewStatus: null, priority: 'critical', reconId: 'tds-26q',
-  },
-  {
-    id: 't14', phase: 'reconciliation', task: 'TDS — 24Q vs Books (Salary)',
-    owner: 'u5', dueDate: '2026-05-15', status: 'completed', completedAt: '2026-04-03T14:30:00',
-    reviewer: 'u2', reviewStatus: 'approved', priority: 'critical', reconId: 'tds-24q',
-  },
-  {
-    id: 't15', phase: 'reconciliation', task: 'GST ITC Recon — GSTR-2B vs Purchase Register',
-    owner: 'u2', dueDate: '2026-04-20', status: 'in_progress', completedAt: null,
-    reviewer: 'u1', reviewStatus: null, priority: 'critical', reconId: 'gst-itc',
-  },
-  {
-    id: 't16', phase: 'reconciliation', task: 'GST Output Recon — GSTR-1 vs Sales Register',
-    owner: 'u3', dueDate: '2026-04-11', status: 'not_started', completedAt: null,
-    reviewer: 'u2', reviewStatus: null, priority: 'critical', reconId: 'gst-output',
-  },
-  {
-    id: 't17', phase: 'reconciliation', task: 'GST Liability Recon — GSTR-1 vs GSTR-3B',
-    owner: 'u2', dueDate: '2026-04-20', status: 'not_started', completedAt: null,
-    reviewer: 'u1', reviewStatus: null, priority: 'high', reconId: 'gst-liability',
-  },
-  {
-    id: 't18', phase: 'reconciliation', task: 'Sales-to-Cash — Platform Settlements',
+    id: 't13', phase: 'reconciliation', task: 'Sales-to-Cash — Platform Settlements',
     owner: 'u1', dueDate: '2026-04-10', status: 'in_progress', completedAt: null,
     reviewer: 'u6', reviewStatus: null, priority: 'high', reconId: 'platform-sales-cash',
   },
   {
-    id: 't19', phase: 'reconciliation', task: 'Platform & Merchant Fee Recon',
-    owner: 'u3', dueDate: '2026-04-10', status: 'in_progress', completedAt: null,
-    reviewer: 'u2', reviewStatus: null, priority: 'medium', reconId: 'platform-merchant-fees',
+    id: 't14', phase: 'reconciliation', task: 'GST Output Recon — GSTR-1 vs Sales Register',
+    owner: 'u3', dueDate: '2026-04-11', status: 'not_started', completedAt: null,
+    reviewer: 'u2', reviewStatus: null, priority: 'critical', reconId: 'gst-output',
   },
+  // ── Expense ──
   {
-    id: 't20', phase: 'reconciliation', task: 'HDFC Current A/c — Bank Recon',
-    owner: 'u3', dueDate: '2026-04-04', status: 'in_progress', completedAt: null,
-    reviewer: 'u2', reviewStatus: null, priority: 'critical', reconId: 'bank-hdfc',
-  },
-  {
-    id: 't21', phase: 'reconciliation', task: 'ICICI Savings A/c — Bank Recon',
-    owner: 'u3', dueDate: '2026-04-04', status: 'completed', completedAt: '2026-04-04T12:00:00',
-    reviewer: 'u2', reviewStatus: 'approved', priority: 'critical', reconId: 'bank-icici',
-  },
-  {
-    id: 't22a', phase: 'reconciliation', task: 'Bank Payments Recon — Outward Payments vs GL',
+    id: 't15', phase: 'reconciliation', task: 'Bank Payments Recon — Outward Payments vs GL',
     owner: 'u3', dueDate: '2026-04-06', status: 'not_started', completedAt: null,
     reviewer: 'u2', reviewStatus: null, priority: 'high', reconId: 'bank-payments',
   },
   {
-    id: 't22b', phase: 'reconciliation', task: 'Amex Corporate Card — Statement vs Books',
+    id: 't16', phase: 'reconciliation', task: 'Amex Corporate Card — Statement vs Books',
     owner: 'u3', dueDate: '2026-04-05', status: 'in_progress', completedAt: null,
     reviewer: 'u2', reviewStatus: null, priority: 'high', reconId: 'credit-card-amex',
   },
   {
-    id: 't22c', phase: 'reconciliation', task: 'Prepaid Expenses — Amortisation Schedule vs GL',
+    id: 't17', phase: 'reconciliation', task: 'Prepaid Expenses — Amortisation Schedule vs GL',
     owner: 'u3', dueDate: '2026-04-05', status: 'in_progress', completedAt: null,
     reviewer: 'u2', reviewStatus: null, priority: 'high', reconId: 'prepaid-expenses',
+  },
+  {
+    id: 't18', phase: 'reconciliation', task: 'Platform & Merchant Fee Recon',
+    owner: 'u3', dueDate: '2026-04-10', status: 'in_progress', completedAt: null,
+    reviewer: 'u2', reviewStatus: null, priority: 'medium', reconId: 'platform-merchant-fees',
+  },
+  // ── Tax ──
+  {
+    id: 't19', phase: 'reconciliation', task: 'TDS — 26Q vs Books (Vendor Payments)',
+    owner: 'u3', dueDate: '2026-05-15', status: 'in_progress', completedAt: null,
+    reviewer: 'u2', reviewStatus: null, priority: 'critical', reconId: 'tds-26q',
+  },
+  {
+    id: 't20', phase: 'reconciliation', task: 'TDS — 24Q vs Books (Salary)',
+    owner: 'u5', dueDate: '2026-05-15', status: 'completed', completedAt: '2026-04-03T14:30:00',
+    reviewer: 'u2', reviewStatus: 'approved', priority: 'critical', reconId: 'tds-24q',
+  },
+  {
+    id: 't21', phase: 'reconciliation', task: 'GST ITC Recon — GSTR-2B vs Purchase Register',
+    owner: 'u2', dueDate: '2026-04-20', status: 'in_progress', completedAt: null,
+    reviewer: 'u1', reviewStatus: null, priority: 'critical', reconId: 'gst-itc',
+  },
+  {
+    id: 't22a', phase: 'reconciliation', task: 'GST Liability Recon — GSTR-1 vs GSTR-3B',
+    owner: 'u2', dueDate: '2026-04-20', status: 'not_started', completedAt: null,
+    reviewer: 'u1', reviewStatus: null, priority: 'high', reconId: 'gst-liability',
+  },
+  // ── Balance Sheet ──
+  {
+    id: 't22b', phase: 'reconciliation', task: 'HDFC Current A/c — Bank Recon',
+    owner: 'u3', dueDate: '2026-04-04', status: 'in_progress', completedAt: null,
+    reviewer: 'u2', reviewStatus: null, priority: 'critical', reconId: 'bank-hdfc',
+  },
+  {
+    id: 't22c', phase: 'reconciliation', task: 'ICICI Savings A/c — Bank Recon',
+    owner: 'u3', dueDate: '2026-04-04', status: 'completed', completedAt: '2026-04-04T12:00:00',
+    reviewer: 'u2', reviewStatus: 'approved', priority: 'critical', reconId: 'bank-icici',
   },
   {
     id: 't22d', phase: 'reconciliation', task: 'Intercompany — Prism Exports Ltd.',
