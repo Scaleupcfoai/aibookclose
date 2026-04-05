@@ -137,7 +137,7 @@ export default function App() {
 
   const hasDetail = !tdsReconActive && (selectedTask || selectedRecon || selectedJE);
 
-  // ─── Recon tile filtering ───
+  // ─── Recon tile filtering (cascading top-down) ───
   const DOMAIN_FILTER_OPTIONS = [
     { key: 'ALL', label: 'All Domains' },
     { key: 'TDS', label: 'Tax — Direct' },
@@ -161,17 +161,53 @@ export default function App() {
     { key: 'Internal Control', label: 'Internal Control' },
   ];
 
+  // Tiles after domain filter
+  const tilesAfterDomain = useMemo(() => {
+    if (reconFilterDomain === 'ALL') return reconTiles;
+    const domains = reconFilterDomain.split(',');
+    return reconTiles.filter(t => domains.includes(t.domain));
+  }, [reconFilterDomain]);
+
+  // Available flow values given current domain selection
+  const availableFlows = useMemo(() => {
+    return new Set(tilesAfterDomain.map(t => t.flow));
+  }, [tilesAfterDomain]);
+
+  // Tiles after domain + flow filter
+  const tilesAfterFlow = useMemo(() => {
+    if (reconFilterFlow === 'ALL') return tilesAfterDomain;
+    return tilesAfterDomain.filter(t => t.flow === reconFilterFlow);
+  }, [tilesAfterDomain, reconFilterFlow]);
+
+  // Available compliance values given domain + flow
+  const availableCompliance = useMemo(() => {
+    return new Set(tilesAfterFlow.map(t => t.compliance));
+  }, [tilesAfterFlow]);
+
+  // Final filtered tiles
   const filteredReconTiles = useMemo(() => {
-    return reconTiles.filter(t => {
-      if (reconFilterDomain !== 'ALL') {
-        const domains = reconFilterDomain.split(',');
-        if (!domains.includes(t.domain)) return false;
-      }
-      if (reconFilterFlow !== 'ALL' && t.flow !== reconFilterFlow) return false;
-      if (reconFilterCompliance !== 'ALL' && t.compliance !== reconFilterCompliance) return false;
-      return true;
-    });
-  }, [reconFilterDomain, reconFilterFlow, reconFilterCompliance]);
+    if (reconFilterCompliance === 'ALL') return tilesAfterFlow;
+    return tilesAfterFlow.filter(t => t.compliance === reconFilterCompliance);
+  }, [tilesAfterFlow, reconFilterCompliance]);
+
+  // Auto-correct filters when parent selection invalidates child
+  const handleDomainFilter = (key) => {
+    setReconFilterDomain(key);
+    // Check if current flow is still valid
+    const domains = key === 'ALL' ? null : key.split(',');
+    const tilesForDomain = domains ? reconTiles.filter(t => domains.includes(t.domain)) : reconTiles;
+    const flows = new Set(tilesForDomain.map(t => t.flow));
+    if (reconFilterFlow !== 'ALL' && !flows.has(reconFilterFlow)) setReconFilterFlow('ALL');
+    const compliances = new Set(tilesForDomain.map(t => t.compliance));
+    if (reconFilterCompliance !== 'ALL' && !compliances.has(reconFilterCompliance)) setReconFilterCompliance('ALL');
+  };
+
+  const handleFlowFilter = (key) => {
+    setReconFilterFlow(key);
+    const tiles = key === 'ALL' ? tilesAfterDomain : tilesAfterDomain.filter(t => t.flow === key);
+    const compliances = new Set(tiles.map(t => t.compliance));
+    if (reconFilterCompliance !== 'ALL' && !compliances.has(reconFilterCompliance)) setReconFilterCompliance('ALL');
+  };
 
   const reconDoneCount = reconTiles.filter(t => t.status === 'Done').length;
 
@@ -521,7 +557,7 @@ export default function App() {
 
         {/* ─── RECONCILIATIONS VIEW — 15 Tiles ─── */}
         {activeView === 'reconciliations' && !tdsReconActive && (
-          <div className="view-content" style={{ maxWidth: 'none' }}>
+          <div className="view-content">
             <div className="view-header">
               <h1>Reconciliations</h1>
               <div className="view-header-right">
@@ -532,28 +568,39 @@ export default function App() {
             {/* Filter bar */}
             <div className="rtile-filter-bar">
               <div className="rtile-filter-row">
+                <span className="rtile-filter-label">Domain</span>
                 {DOMAIN_FILTER_OPTIONS.map(f => (
                   <button key={f.key}
                     className={`rtile-pill ${reconFilterDomain === f.key ? 'active' : ''}`}
-                    onClick={() => setReconFilterDomain(f.key)}
+                    onClick={() => handleDomainFilter(f.key)}
                   >{f.label}</button>
                 ))}
               </div>
               <div className="rtile-filter-row">
-                {FLOW_FILTER_OPTIONS.map(f => (
+                <span className="rtile-filter-label">Flow</span>
+                {FLOW_FILTER_OPTIONS.map(f => {
+                  const disabled = f.key !== 'ALL' && !availableFlows.has(f.key);
+                  return (
                   <button key={f.key}
-                    className={`rtile-pill ${reconFilterFlow === f.key ? 'active' : ''}`}
-                    onClick={() => setReconFilterFlow(f.key)}
+                    className={`rtile-pill ${reconFilterFlow === f.key ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
+                    onClick={() => !disabled && handleFlowFilter(f.key)}
+                    disabled={disabled}
                   >{f.label}</button>
-                ))}
+                  );
+                })}
               </div>
               <div className="rtile-filter-row">
-                {COMPLIANCE_FILTER_OPTIONS.map(f => (
+                <span className="rtile-filter-label">Compliance</span>
+                {COMPLIANCE_FILTER_OPTIONS.map(f => {
+                  const disabled = f.key !== 'ALL' && !availableCompliance.has(f.key);
+                  return (
                   <button key={f.key}
-                    className={`rtile-pill ${reconFilterCompliance === f.key ? 'active' : ''}`}
-                    onClick={() => setReconFilterCompliance(f.key)}
+                    className={`rtile-pill ${reconFilterCompliance === f.key ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
+                    onClick={() => !disabled && setReconFilterCompliance(f.key)}
+                    disabled={disabled}
                   >{f.label}</button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
