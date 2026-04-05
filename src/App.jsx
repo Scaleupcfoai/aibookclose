@@ -606,17 +606,83 @@ export default function App() {
 
             {/* 3-column tile grid */}
             <div className="rtile-grid">
-              {filteredReconTiles.map(tile => (
+              {filteredReconTiles.map(tile => {
+                const domainColor = DOMAIN_COLORS[tile.domain] || { bg: '#F3F4F6', text: '#374151' };
+                const statusColor = STATUS_COLORS[tile.status] || { bg: '#F3F4F6', text: '#6B7280' };
+                const assignee = ASSIGNEES[tile.assignee];
+                const variance = (tile.source_a_value != null && tile.source_b_value != null)
+                  ? Math.abs(tile.source_a_value - tile.source_b_value) : null;
+                const isMatched = variance === 0;
+                const dueDateStyle = tile.compliance === 'Regulatory' ? getDueDateColor(tile.due_date) : null;
+
+                return (
                 <div
                   key={tile.id}
-                  className="rtile-card"
+                  className="rtile-card rtile-card-full"
                   onClick={() => tile.id === 'tds-26q' ? setTdsReconActive(true) : console.log('tile:', tile.id)}
                 >
-                  <div className="rtile-card-placeholder">
-                    <span className="rtile-placeholder-title">{tile.title}</span>
+                  {/* Row 1: Domain + Status badges */}
+                  <div className="rtile-row-badges">
+                    <span className="rtile-domain-badge" style={{ background: domainColor.bg, color: domainColor.text }}>
+                      {tile.domain.replace('_', ' ')}
+                    </span>
+                    <span className="rtile-status-badge" style={{ background: statusColor.bg, color: statusColor.text }}>
+                      {tile.status}
+                    </span>
+                  </div>
+
+                  {/* Row 2-3: Title + Recon type + Compliance */}
+                  <div className="rtile-title">{tile.title}</div>
+                  <div className="rtile-meta">
+                    <span className="rtile-recon-type">{tile.recon_type}</span>
+                    <span className="rtile-compliance-dot" style={{ background: tile.compliance === 'Regulatory' ? '#DC2626' : '#9CA3AF' }}
+                      title={tile.compliance} />
+                    <span className="rtile-compliance-label">{tile.compliance}</span>
+                  </div>
+
+                  {/* Divider + Source rows */}
+                  <div className="rtile-divider" />
+                  <div className="rtile-sources">
+                    <div className="rtile-source-row">
+                      <span className="rtile-source-label">{tile.source_a_label}</span>
+                      <span className="rtile-source-value">{formatINR(tile.source_a_value)}</span>
+                    </div>
+                    <div className="rtile-source-row">
+                      <span className="rtile-source-label">{tile.source_b_label}</span>
+                      <span className="rtile-source-value">{formatINR(tile.source_b_value)}</span>
+                    </div>
+                    {variance != null && (
+                      <div className="rtile-source-row rtile-variance-row">
+                        <span className="rtile-source-label" style={{ color: isMatched ? '#16A34A' : '#F97316' }}>
+                          {isMatched ? 'Matched ✓' : 'Variance'}
+                        </span>
+                        {!isMatched && (
+                          <span className="rtile-source-value" style={{ color: '#DC2626', fontWeight: 700 }}>
+                            {formatINR(variance)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Divider + Footer */}
+                  <div className="rtile-divider" />
+                  <div className="rtile-footer">
+                    <div className="rtile-avatar" style={{ background: assignee?.bg || '#6B7280' }}
+                      title={assignee?.name}>
+                      {tile.assignee}
+                    </div>
+                    <span className="rtile-items">{tile.items_open > 0 ? `${tile.items_open} items` : 'No items'}</span>
+                    {tile.due_date && dueDateStyle && (
+                      <span className="rtile-due" style={{ color: dueDateStyle.color, fontWeight: dueDateStyle.bold ? 700 : 400 }}>
+                        {tile.regulatory_note || `Due ${tile.due_date}`}
+                      </span>
+                    )}
+                    <span className="rtile-arrow">→</span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
