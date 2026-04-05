@@ -94,8 +94,8 @@ export default function App() {
       const done = tasks.filter(t => taskStatuses[t.id] === 'completed').length;
       byPhase[phase] = { total: tasks.length, done, pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0 };
     });
-    const reconDone = reconciliations.filter(r => r.status === 'completed').length;
-    const reconTotal = reconciliations.length;
+    const reconDone = reconTiles.filter(r => r.status === 'Done').length;
+    const reconTotal = reconTiles.length;
     const jePosted = Object.values(jeStatuses).filter(s => s === 'posted' || s === 'approved').length;
     const jeTotal = journalEntries.length;
     return { total, completed, inProgress, notStarted, pct: Math.round((completed / total) * 100), byPhase, reconDone, reconTotal, jePosted, jeTotal };
