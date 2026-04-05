@@ -3,6 +3,7 @@ import {
   teamMembers, closePeriod, closeChecklist, phaseConfig,
   reconciliations, journalEntries, trialBalance, fluxData, activityLog
 } from './data/mockData';
+import { reconTiles, DOMAIN_COLORS, STATUS_COLORS, ASSIGNEES, formatINR, getDueDateColor } from './data/reconTiles';
 import TdsRecon from './TdsRecon';
 import './index.css';
 import lekhaLogo from '/lekha-logo.svg';
@@ -63,6 +64,9 @@ export default function App() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedRecon, setSelectedRecon] = useState(null);
   const [selectedJE, setSelectedJE] = useState(null);
+  const [reconFilterDomain, setReconFilterDomain] = useState('ALL');
+  const [reconFilterFlow, setReconFilterFlow] = useState('ALL');
+  const [reconFilterCompliance, setReconFilterCompliance] = useState('ALL');
   const [expandedPhases, setExpandedPhases] = useState(new Set(['reconciliation', 'adjusting_entries']));
   const [taskStatuses, setTaskStatuses] = useState(() => {
     const map = {};
@@ -132,6 +136,44 @@ export default function App() {
   };
 
   const hasDetail = !tdsReconActive && (selectedTask || selectedRecon || selectedJE);
+
+  // ─── Recon tile filtering ───
+  const DOMAIN_FILTER_OPTIONS = [
+    { key: 'ALL', label: 'All Domains' },
+    { key: 'TDS', label: 'Tax — Direct' },
+    { key: 'GST', label: 'Tax — Indirect' },
+    { key: 'BANK', label: 'Banking' },
+    { key: 'PLATFORM', label: 'Platform' },
+    { key: 'CREDIT_CARD', label: 'Credit Card' },
+    { key: 'EXPENSE', label: 'Expense' },
+    { key: 'PAYROLL', label: 'Payroll' },
+    { key: 'INTERCOMPANY,ACCRUAL', label: 'Balance Sheet' },
+  ];
+  const FLOW_FILTER_OPTIONS = [
+    { key: 'ALL', label: 'All Flows' },
+    { key: 'Revenue', label: 'Revenue' },
+    { key: 'Expense', label: 'Expense' },
+    { key: 'Balance Sheet', label: 'Balance Sheet' },
+  ];
+  const COMPLIANCE_FILTER_OPTIONS = [
+    { key: 'ALL', label: 'All' },
+    { key: 'Regulatory', label: 'Regulatory' },
+    { key: 'Internal Control', label: 'Internal Control' },
+  ];
+
+  const filteredReconTiles = useMemo(() => {
+    return reconTiles.filter(t => {
+      if (reconFilterDomain !== 'ALL') {
+        const domains = reconFilterDomain.split(',');
+        if (!domains.includes(t.domain)) return false;
+      }
+      if (reconFilterFlow !== 'ALL' && t.flow !== reconFilterFlow) return false;
+      if (reconFilterCompliance !== 'ALL' && t.compliance !== reconFilterCompliance) return false;
+      return true;
+    });
+  }, [reconFilterDomain, reconFilterFlow, reconFilterCompliance]);
+
+  const reconDoneCount = reconTiles.filter(t => t.status === 'Done').length;
 
   // ─── Navigation Items ────────────────────────────────────
   const navItems = [
@@ -477,57 +519,57 @@ export default function App() {
           </div>
         )}
 
-        {/* ─── RECONCILIATIONS VIEW ─── */}
+        {/* ─── RECONCILIATIONS VIEW — 15 Tiles ─── */}
         {activeView === 'reconciliations' && !tdsReconActive && (
-          <div className="view-content">
+          <div className="view-content" style={{ maxWidth: 'none' }}>
             <div className="view-header">
               <h1>Reconciliations</h1>
               <div className="view-header-right">
-                <span className="completed-count">{stats.reconDone}/{stats.reconTotal} completed</span>
+                <span className="completed-count">{reconDoneCount}/{reconTiles.length} completed</span>
               </div>
             </div>
 
-            <div className="recon-grid">
-              {reconciliations.map(r => {
-                const owner = getMember(r.owner);
-                return (
-                  <div
-                    key={r.id}
-                    className={`recon-card ${r.status} ${selectedRecon?.id === r.id ? 'selected' : ''}`}
-                    onClick={() => r.id === 'r7' ? setTdsReconActive(true) : setSelectedRecon(r)}
-                  >
-                    <div className="recon-card-header">
-                      <span className={`recon-type-badge ${r.type}`}>{r.type.replace('_', ' ')}</span>
-                      <span className={`recon-status-badge ${r.status}`}>{statusLabel(r.status)}</span>
-                    </div>
-                    <div className="recon-account">{r.account}</div>
-                    {r.status !== 'not_started' && (
-                      <div className="recon-balances">
-                        <div className="recon-bal-row">
-                          <span>GL Balance</span>
-                          <span>{fmtFull(r.glBalance)}</span>
-                        </div>
-                        <div className="recon-bal-row">
-                          <span>Supporting</span>
-                          <span>{fmtFull(r.supportingBalance)}</span>
-                        </div>
-                        {r.variance !== null && r.variance !== 0 && (
-                          <div className="recon-bal-row variance">
-                            <span>Variance</span>
-                            <span className="variance-amount">{fmtFull(r.variance)}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="recon-card-footer">
-                      <div className="avatar-sm" style={{ background: owner.color }} title={owner.name}>{owner.avatar}</div>
-                      <span className="recon-items-count">
-                        {r.reconcilingItems.length > 0 ? `${r.reconcilingItems.length} items` : 'No items'}
-                      </span>
-                    </div>
+            {/* Filter bar */}
+            <div className="rtile-filter-bar">
+              <div className="rtile-filter-row">
+                {DOMAIN_FILTER_OPTIONS.map(f => (
+                  <button key={f.key}
+                    className={`rtile-pill ${reconFilterDomain === f.key ? 'active' : ''}`}
+                    onClick={() => setReconFilterDomain(f.key)}
+                  >{f.label}</button>
+                ))}
+              </div>
+              <div className="rtile-filter-row">
+                {FLOW_FILTER_OPTIONS.map(f => (
+                  <button key={f.key}
+                    className={`rtile-pill ${reconFilterFlow === f.key ? 'active' : ''}`}
+                    onClick={() => setReconFilterFlow(f.key)}
+                  >{f.label}</button>
+                ))}
+              </div>
+              <div className="rtile-filter-row">
+                {COMPLIANCE_FILTER_OPTIONS.map(f => (
+                  <button key={f.key}
+                    className={`rtile-pill ${reconFilterCompliance === f.key ? 'active' : ''}`}
+                    onClick={() => setReconFilterCompliance(f.key)}
+                  >{f.label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3-column tile grid */}
+            <div className="rtile-grid">
+              {filteredReconTiles.map(tile => (
+                <div
+                  key={tile.id}
+                  className="rtile-card"
+                  onClick={() => tile.id === 'tds-26q' ? setTdsReconActive(true) : console.log('tile:', tile.id)}
+                >
+                  <div className="rtile-card-placeholder">
+                    <span className="rtile-placeholder-title">{tile.title}</span>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </div>
         )}

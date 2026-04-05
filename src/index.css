@@ -578,3 +578,73 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #c1c7d0; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #97a0af; }
+
+/* ═══ RECONCILIATION TILES — 15-tile grid ═══ */
+
+/* Filter bar */
+.rtile-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.rtile-filter-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rtile-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #E5E7EB;
+  background: #fff;
+  color: #6B7280;
+  transition: all 0.15s;
+}
+.rtile-pill:hover { border-color: #9CA3AF; }
+.rtile-pill.active {
+  background: #111827;
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Tile grid — 3 columns */
+.rtile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 1100px) {
+  .rtile-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Tile card — placeholder for Step 1 */
+.rtile-card {
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
+  background: #fff;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rtile-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  transform: translateY(-1px);
+}
+.rtile-card-placeholder {
+  text-align: center;
+}
+.rtile-placeholder-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
