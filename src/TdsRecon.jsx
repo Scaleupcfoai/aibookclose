@@ -1108,7 +1108,7 @@ function TdsRecon({ onBack }) {
                               )
                             ))}
 
-                          {/* Interactive question from agent */}
+                          {/* Interactive question from agent — Column Confirmation or Standard */}
                           {pendingQuestion && pendingQuestion.agent === block.agent && !pendingQuestion._answered && (
                             <div className="tds-question-block">
                               <div className="tds-question-header">
@@ -1116,6 +1116,77 @@ function TdsRecon({ onBack }) {
                                 <span className="tds-question-agent">{block.agent} needs your input</span>
                               </div>
                               <div className="tds-question-text">{pendingQuestion.message}</div>
+
+                              {/* Column Confirmation Table — rendered when column_confirmation data is in events */}
+                              {(() => {
+                                const colConfEvent = block.events.find(e => e.data?.type === 'column_confirmation');
+                                if (colConfEvent?.data?.files) {
+                                  return (
+                                    <div className="tds-column-confirm">
+                                      {colConfEvent.data.files.map((file, fi) => (
+                                        <div key={fi} className="tds-col-file-section">
+                                          <div className="tds-col-file-header">
+                                            <strong>{file.file_type === 'tds' ? 'Form 26' : 'Tally'}</strong>
+                                            <span style={{ opacity: 0.6, marginLeft: 8 }}>{file.sheet_name} ({file.total_rows} rows)</span>
+                                            {file.expense_head_columns > 0 && (
+                                              <span style={{ opacity: 0.5, marginLeft: 8, fontSize: 11 }}>
+                                                + {file.expense_head_columns} expense heads, {file.gst_columns || 0} GST cols
+                                              </span>
+                                            )}
+                                          </div>
+                                          <table className="tds-col-table">
+                                            <thead>
+                                              <tr>
+                                                <th>Col</th>
+                                                <th>File Column</th>
+                                                <th>Mapped To</th>
+                                                <th>Confidence</th>
+                                                <th>Samples</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {file.columns.map((col, ci) => (
+                                                <tr key={ci} className={col.tier === 'HIGH' ? '' : col.tier === 'MEDIUM' ? 'tds-col-medium' : 'tds-col-low'}>
+                                                  <td style={{ opacity: 0.5 }}>{col.col_index + 1}</td>
+                                                  <td>{col.source_name}</td>
+                                                  <td>
+                                                    <select
+                                                      value={col.mapped_to || ''}
+                                                      onChange={(e) => {
+                                                        // Update mapping in the event data (for submission)
+                                                        const newTarget = e.target.value;
+                                                        col.mapped_to = newTarget;
+                                                      }}
+                                                      className="tds-col-select"
+                                                    >
+                                                      <option value={col.mapped_to}>{col.mapped_to}</option>
+                                                      {(col.alternatives || []).map(alt => (
+                                                        <option key={alt} value={alt}>{alt}</option>
+                                                      ))}
+                                                      <option value="skip">skip</option>
+                                                    </select>
+                                                  </td>
+                                                  <td>
+                                                    <span className={`tds-conf-badge ${col.tier === 'HIGH' ? 'high' : col.tier === 'MEDIUM' ? 'medium' : 'low'}`}>
+                                                      {Math.round(col.confidence * 100)}%
+                                                    </span>
+                                                  </td>
+                                                  <td style={{ fontSize: 11, opacity: 0.6, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {(col.sample_values || []).join(', ')}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+
+                              {/* Standard question options */}
                               <div className="tds-question-options">
                                 {pendingQuestion.options?.map((opt) => (
                                   <button
@@ -1141,36 +1212,13 @@ function TdsRecon({ onBack }) {
                                     </div>
                                   </button>
                                 ))}
-                                {pendingQuestion.allow_text_input && (
-                                  <button
-                                    className={`tds-question-option ${questionAnswer.selected.includes('_other') ? 'selected' : ''}`}
-                                    onClick={() => setQuestionAnswer(prev => ({ ...prev, selected: ['_other'] }))}
-                                  >
-                                    <div className="tds-option-radio">{questionAnswer.selected.includes('_other') ? '\u25CF' : '\u25CB'}</div>
-                                    <div className="tds-option-content">
-                                      <div className="tds-option-label">Other...</div>
-                                      <div className="tds-option-desc">Provide custom instructions</div>
-                                    </div>
-                                  </button>
-                                )}
                               </div>
-                              {questionAnswer.selected.includes('_other') && (
-                                <input
-                                  className="tds-question-text-input"
-                                  type="text"
-                                  placeholder="Type your instructions..."
-                                  value={questionAnswer.textInput}
-                                  onChange={e => setQuestionAnswer(prev => ({ ...prev, textInput: e.target.value }))}
-                                  onKeyDown={e => { if (e.key === 'Enter') submitAnswer(); }}
-                                  autoFocus
-                                />
-                              )}
                               <button
                                 className="tds-question-submit"
                                 disabled={questionAnswer.selected.length === 0}
                                 onClick={submitAnswer}
                               >
-                                Submit Decision
+                                {block.events.some(e => e.data?.type === 'column_confirmation') ? 'Confirm Columns & Parse' : 'Submit Decision'}
                               </button>
                             </div>
                           )}
