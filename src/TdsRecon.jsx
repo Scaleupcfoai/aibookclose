@@ -1117,73 +1117,111 @@ function TdsRecon({ onBack }) {
                               </div>
                               <div className="tds-question-text">{pendingQuestion.message}</div>
 
-                              {/* Column Confirmation Table — rendered when column_confirmation data is in events */}
+                              {/* Column Confirmation Table with Preview + Relationships */}
                               {(() => {
                                 const colConfEvent = block.events.find(e => e.data?.type === 'column_confirmation');
-                                if (colConfEvent?.data?.files) {
-                                  return (
-                                    <div className="tds-column-confirm">
-                                      {colConfEvent.data.files.map((file, fi) => (
-                                        <div key={fi} className="tds-col-file-section">
-                                          <div className="tds-col-file-header">
-                                            <strong>{file.file_type === 'tds' ? 'Form 26' : 'Tally'}</strong>
-                                            <span style={{ opacity: 0.6, marginLeft: 8 }}>{file.sheet_name} ({file.total_rows} rows)</span>
-                                            {file.expense_head_columns > 0 && (
-                                              <span style={{ opacity: 0.5, marginLeft: 8, fontSize: 11 }}>
-                                                + {file.expense_head_columns} expense heads, {file.gst_columns || 0} GST cols
-                                              </span>
-                                            )}
-                                          </div>
-                                          <table className="tds-col-table">
-                                            <thead>
-                                              <tr>
-                                                <th>Col</th>
-                                                <th>File Column</th>
-                                                <th>Mapped To</th>
-                                                <th>Confidence</th>
-                                                <th>Samples</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {file.columns.map((col, ci) => (
-                                                <tr key={ci} className={col.tier === 'HIGH' ? '' : col.tier === 'MEDIUM' ? 'tds-col-medium' : 'tds-col-low'}>
-                                                  <td style={{ opacity: 0.5 }}>{col.col_index + 1}</td>
-                                                  <td>{col.source_name}</td>
-                                                  <td>
-                                                    <select
-                                                      value={col.mapped_to || ''}
-                                                      onChange={(e) => {
-                                                        // Update mapping in the event data (for submission)
-                                                        const newTarget = e.target.value;
-                                                        col.mapped_to = newTarget;
-                                                      }}
-                                                      className="tds-col-select"
-                                                    >
-                                                      <option value={col.mapped_to}>{col.mapped_to}</option>
-                                                      {(col.alternatives || []).map(alt => (
-                                                        <option key={alt} value={alt}>{alt}</option>
-                                                      ))}
-                                                      <option value="skip">skip</option>
-                                                    </select>
-                                                  </td>
-                                                  <td>
-                                                    <span className={`tds-conf-badge ${col.tier === 'HIGH' ? 'high' : col.tier === 'MEDIUM' ? 'medium' : 'low'}`}>
-                                                      {Math.round(col.confidence * 100)}%
-                                                    </span>
-                                                  </td>
-                                                  <td style={{ fontSize: 11, opacity: 0.6, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {(col.sample_values || []).join(', ')}
-                                                  </td>
-                                                </tr>
-                                              ))}
-                                            </tbody>
-                                          </table>
+                                if (!colConfEvent?.data?.files) return null;
+                                const confData = colConfEvent.data;
+                                return (
+                                  <div className="tds-column-confirm">
+                                    {/* Cross-column relationship insights */}
+                                    {confData.relationships?.length > 0 && (
+                                      <div className="tds-col-relationships">
+                                        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--accent-blue, #58a6ff)' }}>
+                                          Detected relationships:
                                         </div>
-                                      ))}
-                                    </div>
-                                  );
-                                }
-                                return null;
+                                        {confData.relationships.map((rel, ri) => (
+                                          <div key={ri} style={{ fontSize: 11, opacity: 0.8, padding: '2px 0' }}>
+                                            {'\u2192'} {rel.interpretation}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {confData.files.map((file, fi) => (
+                                      <div key={fi} className="tds-col-file-section">
+                                        <div className="tds-col-file-header">
+                                          <strong>{file.file_type === 'tds' ? 'Form 26' : 'Tally'}</strong>
+                                          <span style={{ opacity: 0.6, marginLeft: 8 }}>{file.sheet_name} ({file.total_rows} rows)</span>
+                                          {file.expense_head_columns > 0 && (
+                                            <span style={{ opacity: 0.5, marginLeft: 8, fontSize: 11 }}>
+                                              + {file.expense_head_columns} expense heads, {file.gst_columns || 0} GST cols
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Column mapping table */}
+                                        <table className="tds-col-table">
+                                          <thead>
+                                            <tr>
+                                              <th>Col</th>
+                                              <th>File Column</th>
+                                              <th>Mapped To</th>
+                                              <th>Conf</th>
+                                              <th>Method</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {file.columns.map((col, ci) => (
+                                              <tr key={ci} className={col.tier === 'HIGH' ? '' : col.tier === 'MEDIUM' ? 'tds-col-medium' : 'tds-col-low'}>
+                                                <td style={{ opacity: 0.5 }}>{col.col_index + 1}</td>
+                                                <td>{col.source_name}</td>
+                                                <td>
+                                                  <select
+                                                    value={col.mapped_to || ''}
+                                                    onChange={(e) => { col.mapped_to = e.target.value; }}
+                                                    className="tds-col-select"
+                                                  >
+                                                    <option value={col.mapped_to}>{col.mapped_to}</option>
+                                                    {(col.alternatives || []).map(alt => (
+                                                      <option key={alt} value={alt}>{alt}</option>
+                                                    ))}
+                                                    <option value="skip">skip</option>
+                                                  </select>
+                                                </td>
+                                                <td>
+                                                  <span className={`tds-conf-badge ${col.tier === 'HIGH' ? 'high' : col.tier === 'MEDIUM' ? 'medium' : 'low'}`}>
+                                                    {Math.round(col.confidence * 100)}%
+                                                  </span>
+                                                </td>
+                                                <td style={{ fontSize: 10, opacity: 0.5 }}>{col.method}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+
+                                        {/* Preview rows — mapped data as user would see it */}
+                                        {file.preview_rows?.length > 0 && (
+                                          <div className="tds-col-preview">
+                                            <div style={{ fontSize: 10, fontWeight: 600, padding: '4px 8px', opacity: 0.6 }}>
+                                              Preview (first {file.preview_rows.length} rows with this mapping):
+                                            </div>
+                                            <table className="tds-col-table tds-col-preview-table">
+                                              <thead>
+                                                <tr>
+                                                  {Object.keys(file.preview_rows[0]).map(field => (
+                                                    <th key={field}>{field}</th>
+                                                  ))}
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {file.preview_rows.map((row, ri) => (
+                                                  <tr key={ri}>
+                                                    {Object.values(row).map((val, vi) => (
+                                                      <td key={vi} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {val}
+                                                      </td>
+                                                    ))}
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
                               })()}
 
                               {/* Standard question options */}
