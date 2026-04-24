@@ -349,19 +349,22 @@ function TdsRecon({ onBack }) {
   };
 
   // Submit answer to a pending question
-  const submitAnswer = async () => {
-    if (!pendingQuestion || questionAnswer.selected.length === 0) return;
+  const submitAnswer = async (overrideSelected) => {
+    if (!pendingQuestion) return;
+
+    const selected = overrideSelected || questionAnswer.selected;
+    if (selected.length === 0) return;
 
     const answer = {
-      question_id: pendingQuestion.question_id,
-      selected: questionAnswer.selected.filter(s => s !== '_other'),
-      text_input: questionAnswer.selected.includes('_other') ? questionAnswer.textInput : null,
+      question_id: pendingQuestion.question_id || pendingQuestion.data?.question_id,
+      selected: selected.filter(s => s !== '_other'),
+      text_input: selected.includes('_other') ? questionAnswer.textInput : null,
     };
 
     // Show user's answer as a chat message
-    const answerText = questionAnswer.selected.includes('_other')
+    const answerText = selected.includes('_other')
       ? questionAnswer.textInput
-      : questionAnswer.selected.map(id => pendingQuestion.options?.find(o => o.id === id)?.label || id).join(', ');
+      : selected.map(id => pendingQuestion.options?.find(o => o.id === id)?.label || id).join(', ');
     setChatMessages(prev => [...prev, { role: 'user', content: answerText }]);
 
     // Mark question as answered
@@ -1256,8 +1259,7 @@ function TdsRecon({ onBack }) {
                                 disabled={questionAnswer.selected.length === 0 && !block.events.some(e => e.data?.type === 'column_confirmation')}
                                 onClick={() => {
                                   if (block.events.some(e => e.data?.type === 'column_confirmation') && questionAnswer.selected.length === 0) {
-                                    setQuestionAnswer(prev => ({ ...prev, selected: ['confirm'] }));
-                                    setTimeout(submitAnswer, 100);
+                                    submitAnswer(['confirm']);
                                   } else {
                                     submitAnswer();
                                   }
