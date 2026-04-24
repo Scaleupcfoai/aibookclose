@@ -118,6 +118,9 @@ function TdsRecon({ onBack }) {
           console.log('[TDS] drainQueue: flushing column_confirmation event with question');
           setVisibleEvents(prev => [...prev, confItem]);
         }
+        console.log('[TDS] Question event data:', JSON.stringify(item.data)?.slice(0, 200));
+        console.log('[TDS] Has column_confirmation?', item.data?.type === 'column_confirmation');
+        console.log('[TDS] Has files?', !!item.data?.files);
         setPendingQuestion(item);
         drainPausedRef.current = true;
         console.log('[TDS] drainQueue: HARD PAUSED — no more events until user answers');
