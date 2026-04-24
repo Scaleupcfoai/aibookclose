@@ -2,10 +2,18 @@
 
 > **Read CHANGELOG.md first** before making any changes. It contains the current version, recent changes, and known issues.
 
+## ⚠️ FOUNDER IDENTITY — READ CAREFULLY
+
+- **Founder name: Ashish Jadhao** (NOT Ashish Mehta)
+- **Company: ScaleUp CFO AI**
+- **Product: Lekha AI**
+
+**CRITICAL WARNING:** The mock data in this repo (`src/data/mockData.js`, `src/data/reconTiles.js`) contains a fictional team member named **"Ashish Mehta"** (a Controller character in the demo product). **THIS IS NOT THE FOUNDER.** The founder is **Ashish Jadhao**. Do not confuse these two when addressing the user or referring to him in commits, documentation, notes, or handoffs.
+
 ## Project Identity
 
 - **Product:** Lekha AI — AI-Powered Book Close Management
-- **Owner:** Ashish (Founder, not a full-time engineer)
+- **Owner:** Ashish Jadhao (Founder, not a full-time engineer)
 - **Stage:** Early product demo, optimizing for demo-ready thin slices over perfect architecture
 - **Stack:** React 19 + Vite 7 (frontend only, mock data, no backend yet)
 - **Location:** `C:\Users\Ashish\book-close-demo`
