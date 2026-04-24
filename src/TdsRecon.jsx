@@ -44,6 +44,7 @@ function TdsRecon({ onBack }) {
   const eventQueueRef = useRef([]);
   const drainTimerRef = useRef(null);
   const pipelineReceivedRef = useRef(false);
+  const drainPausedRef = useRef(false);
 
   // Sync companyId when selectedCompany changes (e.g. from company selector)
   useEffect(() => {
@@ -59,6 +60,7 @@ function TdsRecon({ onBack }) {
   // Drip-feed: reveal queued events one by one with delays
   const drainQueue = () => {
     if (drainTimerRef.current) return; // already draining
+    if (drainPausedRef.current) { console.log('[TDS] drainQueue: blocked — waiting for user answer'); return; }
     console.log('[TDS] drainQueue started, queue length:', eventQueueRef.current.length);
     const next = () => {
       const item = eventQueueRef.current.shift();
@@ -101,13 +103,14 @@ function TdsRecon({ onBack }) {
       console.log('[TDS] drainQueue: dripping event:', item.type, item.agent, '| remaining:', eventQueueRef.current.length);
       setVisibleEvents(prev => [...prev, item]);
 
-      // If this is a question event, set as pending AND PAUSE the drip-feed
+      // If this is a question event, set as pending AND HARD PAUSE the drip-feed
       // Don't process any more events until the user answers
       if (item.type === 'question') {
         setPendingQuestion(item);
-        console.log('[TDS] drainQueue: PAUSED — waiting for user to answer question');
+        drainPausedRef.current = true;  // blocks enqueueEvent from restarting drain
+        console.log('[TDS] drainQueue: HARD PAUSED — no more events until user answers');
         drainTimerRef.current = null;
-        return; // Stop draining — resumed when user submits answer
+        return;
       }
 
       // If this has column_confirmation data, also pause
@@ -383,14 +386,13 @@ function TdsRecon({ onBack }) {
     // POST answer to backend
     try {
       await api.post(ENDPOINTS.answer, answer);
-      // Resume the drip-feed queue now that the question is answered
-      console.log('[TDS] Answer submitted — resuming drip-feed queue');
-      drainQueue();
     } catch (err) {
       console.error('[TDS] Failed to submit answer:', err);
-      // Resume drip-feed even on error so the pipeline doesn't freeze
-      drainQueue();
     }
+    // Resume the drip-feed queue now that the question is answered
+    drainPausedRef.current = false;
+    console.log('[TDS] Answer submitted — drip-feed UNPAUSED, resuming');
+    drainQueue();
   };
 
   // Upload files then run, or run on existing data
@@ -405,6 +407,7 @@ function TdsRecon({ onBack }) {
     eventQueueRef.current = [];
     if (drainTimerRef.current) { clearTimeout(drainTimerRef.current); drainTimerRef.current = null; }
     pipelineReceivedRef.current = false;
+    drainPausedRef.current = false;
 
     // Step 1: Upload files if provided
     if (uploadedFiles.form26 && uploadedFiles.tally) {
