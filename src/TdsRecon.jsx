@@ -1253,8 +1253,15 @@ function TdsRecon({ onBack }) {
                               </div>
                               <button
                                 className="tds-question-submit"
-                                disabled={questionAnswer.selected.length === 0}
-                                onClick={submitAnswer}
+                                disabled={questionAnswer.selected.length === 0 && !block.events.some(e => e.data?.type === 'column_confirmation')}
+                                onClick={() => {
+                                  if (block.events.some(e => e.data?.type === 'column_confirmation') && questionAnswer.selected.length === 0) {
+                                    setQuestionAnswer(prev => ({ ...prev, selected: ['confirm'] }));
+                                    setTimeout(submitAnswer, 100);
+                                  } else {
+                                    submitAnswer();
+                                  }
+                                }}
                               >
                                 {block.events.some(e => e.data?.type === 'column_confirmation') ? 'Confirm Columns & Parse' : 'Submit Decision'}
                               </button>
