@@ -101,9 +101,18 @@ function TdsRecon({ onBack }) {
       console.log('[TDS] drainQueue: dripping event:', item.type, item.agent, '| remaining:', eventQueueRef.current.length);
       setVisibleEvents(prev => [...prev, item]);
 
-      // If this is a question event, also set it as pending
+      // If this is a question event, set as pending AND PAUSE the drip-feed
+      // Don't process any more events until the user answers
       if (item.type === 'question') {
         setPendingQuestion(item);
+        console.log('[TDS] drainQueue: PAUSED — waiting for user to answer question');
+        drainTimerRef.current = null;
+        return; // Stop draining — resumed when user submits answer
+      }
+
+      // If this has column_confirmation data, also pause
+      if (item.data?.type === 'column_confirmation') {
+        console.log('[TDS] drainQueue: column confirmation data received, continuing drain');
       }
 
       // Delay depends on event type: agent_start gets longer pause
@@ -374,8 +383,13 @@ function TdsRecon({ onBack }) {
     // POST answer to backend
     try {
       await api.post(ENDPOINTS.answer, answer);
+      // Resume the drip-feed queue now that the question is answered
+      console.log('[TDS] Answer submitted — resuming drip-feed queue');
+      drainQueue();
     } catch (err) {
       console.error('[TDS] Failed to submit answer:', err);
+      // Resume drip-feed even on error so the pipeline doesn't freeze
+      drainQueue();
     }
   };
 
