@@ -103,19 +103,26 @@ function TdsRecon({ onBack }) {
       console.log('[TDS] drainQueue: dripping event:', item.type, item.agent, '| remaining:', eventQueueRef.current.length);
       setVisibleEvents(prev => [...prev, item]);
 
+      // If this has column_confirmation data, mark it so the question block can find it
+      if (item.data?.type === 'column_confirmation') {
+        console.log('[TDS] drainQueue: column confirmation data received');
+      }
+
       // If this is a question event, set as pending AND HARD PAUSE the drip-feed
-      // Don't process any more events until the user answers
+      // But first: drain any remaining column_confirmation events that are next in queue
+      // so the table renders alongside the question
       if (item.type === 'question') {
+        // Flush any column_confirmation events that are queued right after this
+        while (eventQueueRef.current.length > 0 && eventQueueRef.current[0].data?.type === 'column_confirmation') {
+          const confItem = eventQueueRef.current.shift();
+          console.log('[TDS] drainQueue: flushing column_confirmation event with question');
+          setVisibleEvents(prev => [...prev, confItem]);
+        }
         setPendingQuestion(item);
-        drainPausedRef.current = true;  // blocks enqueueEvent from restarting drain
+        drainPausedRef.current = true;
         console.log('[TDS] drainQueue: HARD PAUSED — no more events until user answers');
         drainTimerRef.current = null;
         return;
-      }
-
-      // If this has column_confirmation data, also pause
-      if (item.data?.type === 'column_confirmation') {
-        console.log('[TDS] drainQueue: column confirmation data received, continuing drain');
       }
 
       // Delay depends on event type: agent_start gets longer pause
@@ -1139,9 +1146,11 @@ function TdsRecon({ onBack }) {
 
                               {/* Column Confirmation Table with Preview + Relationships */}
                               {(() => {
-                                const colConfEvent = block.events.find(e => e.data?.type === 'column_confirmation');
-                                if (!colConfEvent?.data?.files) return null;
-                                const confData = colConfEvent.data;
+                                // Check both: question event's own data, and block events
+                                const confData = pendingQuestion?.data?.type === 'column_confirmation'
+                                  ? pendingQuestion.data
+                                  : block.events.find(e => e.data?.type === 'column_confirmation')?.data;
+                                if (!confData?.files) return null;
                                 return (
                                   <div className="tds-column-confirm">
                                     {/* Cross-column relationship insights */}
@@ -1273,16 +1282,17 @@ function TdsRecon({ onBack }) {
                               </div>
                               <button
                                 className="tds-question-submit"
-                                disabled={questionAnswer.selected.length === 0 && !block.events.some(e => e.data?.type === 'column_confirmation')}
+                                disabled={questionAnswer.selected.length === 0 && !pendingQuestion?.data?.type?.includes('column_confirmation') && !block.events.some(e => e.data?.type === 'column_confirmation')}
                                 onClick={() => {
-                                  if (block.events.some(e => e.data?.type === 'column_confirmation') && questionAnswer.selected.length === 0) {
+                                  const isColConf = pendingQuestion?.data?.type === 'column_confirmation' || block.events.some(e => e.data?.type === 'column_confirmation');
+                                  if (isColConf && questionAnswer.selected.length === 0) {
                                     submitAnswer(['confirm']);
                                   } else {
                                     submitAnswer();
                                   }
                                 }}
                               >
-                                {block.events.some(e => e.data?.type === 'column_confirmation') ? 'Confirm Columns & Parse' : 'Submit Decision'}
+                                {(pendingQuestion?.data?.type === 'column_confirmation' || block.events.some(e => e.data?.type === 'column_confirmation')) ? 'Confirm Columns & Parse' : 'Submit Decision'}
                               </button>
                             </div>
                           )}
