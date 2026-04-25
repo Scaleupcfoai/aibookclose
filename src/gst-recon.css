@@ -1,0 +1,64 @@
+/* ═══ GST RECONCILIATION ═══ */
+.gst-recon { display: flex; flex-direction: column; height: 100%; }
+.gst-back-link { display: inline-flex; font-size: 13px; color: var(--text-secondary); cursor: pointer; background: none; border: none; font-family: var(--font-sans); padding: 0; margin-bottom: 16px; }
+.gst-back-link:hover { color: var(--accent); }
+
+.gst-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.gst-header h1 { font-size: 18px; font-weight: 700; }
+.gst-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.gst-run-btn { padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; background: var(--accent); color: #fff; font-family: var(--font-sans); }
+.gst-run-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.gst-stacked { display: flex; flex-direction: column; flex: 1; overflow: hidden; gap: 10px; }
+
+/* KPI Row */
+.gst-kpi-row { display: flex; gap: 10px; background: rgba(70,114,115,0.04); border: 1px solid rgba(70,114,115,0.12); border-radius: 12px; padding: 14px; }
+.gst-kpi { flex: 1; text-align: center; font-size: 22px; font-weight: 800; color: var(--text-primary); }
+.gst-kpi span { display: block; font-size: 10px; font-weight: 500; color: var(--text-muted); margin-top: 2px; }
+
+/* Data Panel */
+.gst-data-panel { flex: 6; overflow-y: auto; }
+.gst-tabs { display: flex; border-bottom: 1px solid rgba(70,114,115,0.1); margin-bottom: 12px; }
+.gst-tab { padding: 8px 16px; font-size: 12px; font-weight: 500; color: var(--text-secondary); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-sans); }
+.gst-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Monthly Grid */
+.gst-monthly-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.gst-month-card { padding: 14px; border: 1px solid #E5E7EB; border-radius: 8px; background: #fff; }
+.gst-month-card.ok { border-left: 3px solid #16A34A; }
+.gst-month-card.issue { border-left: 3px solid #DC2626; }
+.gst-month-name { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.gst-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); padding: 2px 0; }
+.gst-variance { font-weight: 600; padding-top: 6px; border-top: 1px solid #F3F4F6; margin-top: 4px; }
+.gst-variance span:first-child { color: var(--text-primary); }
+
+/* Findings */
+.gst-findings { display: flex; flex-direction: column; gap: 6px; }
+.gst-finding { display: flex; gap: 8px; padding: 10px 12px; border-radius: 6px; font-size: 12px; }
+.gst-finding.error { background: #FEE2E2; }
+.gst-finding.warning { background: #FEF3C7; }
+.gst-finding-icon { font-size: 14px; flex-shrink: 0; }
+.gst-finding-msg { color: var(--text-primary); line-height: 1.5; }
+.gst-empty { text-align: center; padding: 24px; color: var(--text-muted); font-size: 13px; }
+
+/* Matched Table */
+.gst-matched-table { font-size: 12px; }
+.gst-table-header, .gst-table-row { display: grid; grid-template-columns: 1fr 1fr 100px 80px; padding: 6px 8px; gap: 8px; }
+.gst-table-header { font-weight: 600; color: var(--text-muted); border-bottom: 1px solid #E5E7EB; }
+.gst-table-row { border-bottom: 1px solid #F3F4F6; color: var(--text-secondary); }
+.gst-table-row:hover { background: rgba(70,114,115,0.03); }
+
+/* Chat Panel */
+.gst-chat-panel { flex: 4; border-top: 2px solid var(--accent, #467273); background: #f6f8f9; display: flex; flex-direction: column; min-height: 100px; }
+.gst-chat-header { padding: 10px 16px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.gst-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+.gst-dot.active { background: var(--accent-green); animation: pulse 2s infinite; }
+.gst-chat-body { flex: 1; overflow-y: auto; padding: 12px 16px; font-family: var(--font-mono, monospace); font-size: 12px; }
+.gst-chat-msg { color: var(--text-secondary); padding: 8px 0; }
+.gst-done { color: var(--accent); font-weight: 600; }
+.gst-event { padding: 2px 0; color: var(--text-secondary); }
+.gst-event.success { color: var(--accent-green); }
+.gst-event.warning { color: var(--accent-orange); }
+.gst-event.error { color: var(--accent-red); }
+.gst-event-prefix { color: var(--text-muted); margin-right: 4px; }
+.gst-event-agent { color: var(--accent); font-weight: 500; margin-right: 4px; }

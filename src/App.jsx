@@ -5,6 +5,7 @@ import {
 } from './data/mockData';
 import { reconTiles, DOMAIN_COLORS, STATUS_COLORS, ASSIGNEES, formatINR, getDueDateColor } from './data/reconTiles';
 import TdsRecon from './TdsRecon';
+import GstRecon from './GstRecon';
 import './index.css';
 import lekhaLogo from '/lekha-logo.svg';
 
@@ -61,6 +62,7 @@ const priorityColor = (p) => {
 export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
   const [tdsReconActive, setTdsReconActive] = useState(false);
+  const [gstReconActive, setGstReconActive] = useState(null); // null or 'gst-output'|'gst-itc'|'gst-liability'
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedRecon, setSelectedRecon] = useState(null);
   const [selectedJE, setSelectedJE] = useState(null);
@@ -555,8 +557,14 @@ export default function App() {
           </div>
         )}
 
+        {activeView === 'reconciliations' && gstReconActive && (
+          <div className="view-content" style={{ maxWidth: 'none', height: 'calc(100vh - 20px)' }}>
+            <GstRecon onBack={() => setGstReconActive(null)} agentType={gstReconActive} />
+          </div>
+        )}
+
         {/* ─── RECONCILIATIONS VIEW — 15 Tiles ─── */}
-        {activeView === 'reconciliations' && !tdsReconActive && (
+        {activeView === 'reconciliations' && !tdsReconActive && !gstReconActive && (
           <div className="view-content">
             <div className="view-header">
               <h1>Reconciliations</h1>
@@ -619,7 +627,11 @@ export default function App() {
                 <div
                   key={tile.id}
                   className="rtile-card rtile-card-full"
-                  onClick={() => tile.id === 'tds-26q' ? setTdsReconActive(true) : console.log('tile:', tile.id)}
+                  onClick={() => {
+                    if (tile.id === 'tds-26q') setTdsReconActive(true);
+                    else if (['gst-output', 'gst-itc', 'gst-liability'].includes(tile.id)) setGstReconActive(tile.id);
+                    else console.log('tile:', tile.id);
+                  }}
                 >
                   {/* Row 1: Domain badge only */}
                   <div className="rtile-row-badges">
