@@ -6,6 +6,7 @@ import {
 import { reconTiles, DOMAIN_COLORS, STATUS_COLORS, ASSIGNEES, formatINR, getDueDateColor } from './data/reconTiles';
 import TdsRecon from './TdsRecon';
 import GstRecon from './GstRecon';
+import TdsCalculator from './tds-calc/TdsCalculator';
 import './index.css';
 import lekhaLogo from '/lekha-logo.svg';
 
@@ -63,6 +64,7 @@ export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
   const [tdsReconActive, setTdsReconActive] = useState(false);
   const [gstReconActive, setGstReconActive] = useState(null); // null or 'gst-output'|'gst-itc'|'gst-liability'
+  const [tdsCalcActive, setTdsCalcActive] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedRecon, setSelectedRecon] = useState(null);
   const [selectedJE, setSelectedJE] = useState(null);
@@ -137,7 +139,7 @@ export default function App() {
     setSelectedJE(null);
   };
 
-  const hasDetail = !tdsReconActive && (selectedTask || selectedRecon || selectedJE);
+  const hasDetail = !tdsReconActive && !tdsCalcActive && (selectedTask || selectedRecon || selectedJE);
 
   // ─── Recon tile filtering (cascading top-down) ───
   const DOMAIN_FILTER_OPTIONS = [
@@ -342,7 +344,7 @@ export default function App() {
             <button
               key={item.id}
               className={`nav-item ${activeView === item.id ? 'active' : ''}`}
-              onClick={() => { setActiveView(item.id); closeDetail(); }}
+              onClick={() => { setActiveView(item.id); closeDetail(); setTdsCalcActive(false); }}
             >
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
@@ -483,8 +485,15 @@ export default function App() {
           </div>
         )}
 
+        {/* ─── TDS CALCULATOR VIEW (Sub-Ledger Close → Calculate TDS for Deduction) ─── */}
+        {activeView === 'checklist' && tdsCalcActive && (
+          <div className="view-content" style={{ maxWidth: 'none', height: 'calc(100vh - 20px)' }}>
+            <TdsCalculator onBack={() => setTdsCalcActive(false)} />
+          </div>
+        )}
+
         {/* ─── CHECKLIST VIEW ─── */}
-        {activeView === 'checklist' && (
+        {activeView === 'checklist' && !tdsCalcActive && (
           <div className="view-content">
             <div className="view-header">
               <h1>Close Checklist</h1>
@@ -519,7 +528,7 @@ export default function App() {
                           <div
                             key={task.id}
                             className={`task-row ${st} ${selectedTask?.id === task.id ? 'selected' : ''}`}
-                            onClick={() => setSelectedTask(task)}
+                            onClick={() => task.tdsCalc ? setTdsCalcActive(true) : setSelectedTask(task)}
                           >
                             <button
                               className={`task-check ${st}`}

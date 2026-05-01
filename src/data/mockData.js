@@ -91,6 +91,11 @@ export const closeChecklist = [
     owner: 'u5', dueDate: '2026-04-04', status: 'completed', completedAt: '2026-04-04T16:00:00',
     reviewer: 'u2', reviewStatus: 'approved', priority: 'critical',
   },
+  {
+    id: 't12a', phase: 'subledger_close', task: 'Calculate TDS for Deduction',
+    owner: 'u3', dueDate: '2026-04-04', status: 'in_progress', completedAt: null,
+    reviewer: 'u2', reviewStatus: null, priority: 'critical', tdsCalc: true,
+  },
 
   // Phase 3: Reconciliations (15 tasks — Revenue → Expense → Tax → Balance Sheet)
   // ── Revenue ──
