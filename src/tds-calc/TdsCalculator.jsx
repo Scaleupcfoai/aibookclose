@@ -4,11 +4,13 @@ import AgentStream from './components/AgentStream.jsx';
 import FlagReview from './components/FlagReview.jsx';
 import ProposalReview from './components/ProposalReview.jsx';
 import TDSReport from './components/TDSReport.jsx';
-import { apiJson } from './lib/api.js';
+import { apiFetch, apiJson } from './lib/api.js';
 import './tds-calc.css';
 
 export default function TdsCalculator({ onBack }) {
   const [health, setHealth] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState(null);
   const [session, setSession] = useState(null);
   const [pendingQuestion, setPendingQuestion] = useState(null);
   const [proposalReview, setProposalReview] = useState(false);
@@ -16,6 +18,36 @@ export default function TdsCalculator({ onBack }) {
 
   useEffect(() => {
     apiJson('/api/health').then(setHealth).catch(() => setHealth({ status: 'offline' }));
+  }, []);
+
+  // Silent dev-bypass login: skip the lekha login screen by minting a session
+  // cookie automatically. Backend allows this when GOOGLE_CLIENT_ID/SECRET are
+  // unset and ENV != production.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await apiJson('/auth/me');
+        if (cancelled) return;
+        if (me.authenticated) {
+          setAuthReady(true);
+          return;
+        }
+        if (!me.dev_bypass) {
+          setAuthError('Backend requires Google OAuth login, which is not available from this view.');
+          return;
+        }
+        const res = await apiFetch('/auth/dev-login', {
+          method: 'POST',
+          body: JSON.stringify({ email: 'demo@lekha.ai', name: 'Lekha Demo' }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        if (!cancelled) setAuthReady(true);
+      } catch (e) {
+        if (!cancelled) setAuthError(e.message || 'Authentication failed');
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   function reset() {
@@ -41,7 +73,17 @@ export default function TdsCalculator({ onBack }) {
       </header>
 
       <main className="tdscalc-hero">
-        {!session && (
+        {!authReady && !authError && (
+          <div className="muted">Connecting to Lekha…</div>
+        )}
+
+        {authError && (
+          <div className="upload-error" style={{ maxWidth: 480 }}>
+            {authError}
+          </div>
+        )}
+
+        {authReady && !session && (
           <>
             <h1>Calculate TDS on your expenses.</h1>
             <p>
@@ -52,7 +94,7 @@ export default function TdsCalculator({ onBack }) {
           </>
         )}
 
-        {session && (
+        {authReady && session && (
           <div className="tdscalc-session-panel">
             <div className="tdscalc-session-header">
               <div className="tdscalc-session-title">Processing {session.filename}</div>
