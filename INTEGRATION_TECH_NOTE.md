@@ -132,103 +132,117 @@ in books          reconciled        reconciled         expense amount    for rev
 
 ---
 
-## 7. Suspected root cause — Vite dev proxy not compatible with SSE out of the box
+## 7. Root cause — `evtSource.onerror` race in TdsRecon.jsx (REVISED — original Vite-proxy hypothesis was wrong)
 
-### The relevant code paths
+### Initial hypothesis that turned out to be wrong
 
-**Frontend SSE consumer** — `src/TdsRecon.jsx:269-303`:
+Earlier draft of this note suspected Vite's dev proxy was buffering SSE responses. **That was incorrect.** Three independent code-trace passes confirmed:
+
+- Vite proxy uses `http-proxy` which streams transparently with no buffering settings.
+- The original `lekha-tds-calculator` repo uses an identical proxy config and works fine.
+- The TDS Calculator inline view in this same app (`AgentStream.jsx`) consumes its own SSE stream through this same proxy without any issue.
+- Backend `StreamingResponse` yields events progressively in real-time (verifiable with `curl -N`).
+
+### Actual root cause — frontend race condition
+
+The bug is in `src/TdsRecon.jsx:291-299` — the original `evtSource.onerror` handler:
+
 ```js
-const evtSource = new EventSource(streamUrl);   // streamUrl = '/api/run/stream/upload'
-
-evtSource.onmessage = (msg) => {
-  // … queue event for drip-feed reveal …
-};
-
 evtSource.onerror = () => {
   evtSource.close();
-  // ↓ THIS IS THE FALLBACK THAT MASKS THE PROBLEM ↓
   fetch(`${API}/api/results`).then(r => r.json()).then(data => {
-    setResults(data);          // ← stale JSON from disk, written by previous run
+    setResults(data);          // ← stale JSON from disk
     setStatus('done');
   });
 };
 ```
 
-**Backend SSE producer** — `backend/recon/router.py:127-186`:
-- Runs pipeline in a worker thread
-- `async def gen()` polls `EventLogger.events`, yields each new event as `data: {...json...}\n\n`
-- Returns `StreamingResponse(gen(), media_type="text/event-stream")`
-- Backend logs prove this generator runs and produces ~15 events per run.
+`EventSource.onerror` fires every time the SSE connection closes — including the **normal close** right after the backend's generator returns following its final `pipeline_complete` event. So this handler runs on EVERY successful run, not just on real failures.
 
-**Vite proxy config** — `vite.config.js`:
-```js
-server: {
-  port: 5175,
-  proxy: {
-    '/api':  { target: 'http://127.0.0.1:8000', changeOrigin: true },
-    '/auth': { target: 'http://127.0.0.1:8000', changeOrigin: true },
-  },
-}
-```
+### The chain that produces both symptoms
 
-### Why this is suspicious
+1. Browser opens `EventSource('/api/run/stream/upload')` → SSE connects.
+2. Backend yields ~15 events progressively. Frontend's `onmessage` enqueues them via `enqueueEvent()` for drip-fed reveal.
+3. Backend yields `pipeline_complete` (with fresh `results` payload embedded — see `router.py:159-181`). Frontend's `onmessage` sees it, calls `evtSource.close()`, enqueues it as the final drain item.
+4. Connection closes. **Browser fires `onerror` because the stream ended.**
+5. The (broken) `onerror` handler immediately runs `fetch('/api/results')`, which returns the JSON files on disk — possibly fresh, possibly partially-written, possibly stale from a prior run.
+6. `setResults(stale_data)` overwrites whatever the SSE was building up.
+7. `setStatus('done')` flips the UI to its summary view immediately.
+8. Meanwhile the drip-feed drain loop is still running with `setTimeout(next, 400-1200ms)` — the user's chat panel has already been replaced with the summary, so the drip-feed effectively never plays even though the events are technically being emitted.
 
-Vite's dev proxy is built on `http-proxy`. By default:
-- **It does not flush the response body until the upstream connection closes**, which kills SSE — events accumulate buffered until the pipeline finishes, then arrive in one burst (or get dropped if the EventSource times out first).
-- It does not preserve `Content-Type: text/event-stream` reliably under all configurations.
-- `changeOrigin: true` rewrites the `Host` header but doesn't address streaming.
+Both Symptom A (no drip-feed) and Symptom B (0 counts + real ₹ amounts) reduce to the same root cause: the `onerror` fallback hijacks the happy path.
 
-### The chain of failure that produces both symptoms
+The working `AgentStream.jsx:53` in the TDS Calculator side uses `es.onerror = () => {};` (no-op) — that's why it never has this bug.
 
-1. Browser opens `EventSource('/api/run/stream/upload')` → hits Vite (5175)
-2. Vite proxies to FastAPI (8000) — backend starts streaming events
-3. Vite buffers the response → browser sees nothing for several seconds
-4. EventSource times out OR the proxy connection breaks → `evtSource.onerror` fires
-5. Fallback path runs: `fetch('/api/results')` → returns whatever JSON is on disk from the **previous** run
-6. UI renders that stale JSON
-7. Drip-feed never plays because no `evtSource.onmessage` events ever fired
+### Why "0 counts but real ₹ amounts" specifically
 
-This explains **both** Symptom A (no drip-feed) and Symptom B (stale data): a single underlying cause.
+When `/api/results` returns stale JSON, its top-level `summary.matching.matched` (count fields) may be 0 or missing because the schema doesn't have them populated, while `summary.amounts.total_form26_payments` etc. retain values from a prior successful run. The KPI rendering reads counts from one part of the object and amounts from another — explaining the asymmetry.
 
 ---
 
-## 8. Proposed fixes the reviewer should evaluate
+## 8. Fix applied
 
-### Fix 1 (preferred) — Disable buffering for SSE routes in Vite proxy
+Three surgical changes, all in the frontend:
+
+### Change 1 — Add `pipelineCompleteRef`
 
 ```js
-// vite.config.js
-proxy: {
-  '/api/run/stream': {
-    target: 'http://127.0.0.1:8000',
-    changeOrigin: true,
-    // Critical: don't buffer / compress streaming responses
-    configure: (proxy) => {
-      proxy.on('proxyRes', (proxyRes) => {
-        proxyRes.headers['cache-control'] = 'no-cache, no-transform';
-      });
-    },
-  },
-  '/api':  { target: 'http://127.0.0.1:8000', changeOrigin: true },
-  '/auth': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+const pipelineCompleteRef = useRef(false);
+```
+
+Reset to `false` at the start of each `runPipeline()` call (alongside the existing `eventQueueRef` reset).
+
+### Change 2 — Set the flag when `pipeline_complete` arrives
+
+In `evtSource.onmessage`:
+
+```js
+if (event.type === 'pipeline_complete') {
+  pipelineCompleteRef.current = true;
+  evtSource.close();
+  enqueueEvent({ ...event, _pipelineComplete: true });
+  return;
 }
 ```
 
-Note that the more specific `/api/run/stream` entry must come BEFORE the catch-all `/api`.
+### Change 3 — Make `onerror` smart about normal vs failure close
 
-### Fix 2 — Bypass proxy for SSE only
+```js
+evtSource.onerror = () => {
+  evtSource.close();
+  // Normal close after pipeline_complete — let the drip-feed drain. The
+  // drain handler already calls setResults() + setStatus('done') on the
+  // _pipelineComplete marker (TdsRecon.jsx:105-121).
+  if (pipelineCompleteRef.current) return;
 
-Have the frontend connect directly to `http://127.0.0.1:8000/api/run/stream/upload` (full URL) only for the EventSource, and keep relative URLs for everything else. Trade-off: re-introduces CORS for that one endpoint; backend already allows `localhost:5175` so should be fine.
+  // Real failure: backend died or stream dropped mid-run. Recover with
+  // cached results but flag as 'error' so users can distinguish.
+  fetch(`${API}/api/results`).then(r => r.json()).then(data => {
+    setResults(data);
+    setRunCount(prev => prev + 1);
+    setStatus('error');
+  }).catch(() => setStatus('error'));
+};
+```
 
-### Fix 3 — Drop SSE entirely, use polling
+The drain loop already handles `_pipelineComplete: true` items correctly (`TdsRecon.jsx:105-121`) — it calls `setResults(item.results)` from the live SSE payload, then `setStatus('done')`. No backend or drain-loop changes needed.
 
-Frontend POSTs `/api/upload`, then polls `/api/run/status?job_id=X` every 250 ms. Backend stores events under a job ID. Trade-off: less elegant, more requests, but completely sidesteps the proxy issue.
+### Optional defensive backend change
 
-### Other things worth a sanity check
+Added explicit anti-buffering headers to `backend/recon/router.py:186` to protect against future reverse-proxy deployments (nginx, Cloudflare, corporate gateways):
 
-- **Cached JSON pollution:** any leftover `reconciliation_summary.json` from previous runs is loaded by `/api/results` (`router.py:208-217`) and `_stream_pipeline` (`router.py:167-181`). Even when the live SSE works correctly, if the new run produces partial output, the response is mixed with stale fields.
-- **Shared global `EventLogger`** (`backend/recon/agents/event_logger.py:62-73`): the module-level `_logger` object is reset per pipeline run via `reset_logger()`, but if two concurrent pipeline runs ever happened in the same process, they'd race. Probably out of scope right now but flagging for completeness.
-- **Frontend `evtSource.onerror` is too aggressive:** it currently closes the stream and switches to the fallback fetch on the very first error event. EventSource can fire `onerror` for transient hiccups even when the stream is healthy. Logic should distinguish "stream closed" from "transient error".
+```python
+return StreamingResponse(
+    gen(),
+    media_type="text/event-stream",
+    headers={
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+    },
+)
+```
+
+Vite's dev proxy doesn't need these but they're standard SSE-server etiquette.
 
 ---
 
@@ -290,12 +304,12 @@ KPI counts should populate to:
 
 ---
 
-## 11. Files most likely to be touched by the fix
+## 11. Files actually changed by the fix
 
-| Repo | File | Likely change |
+| Repo | File | Change |
 |---|---|---|
-| aibookclose | `vite.config.js` | Add SSE-friendly proxy config |
-| aibookclose | `src/TdsRecon.jsx:291-299` | Make `onerror` handler less aggressive |
-| aitdsrecon | `backend/recon/router.py:127-186` | Possibly add `X-Accel-Buffering: no` response header |
+| aibookclose | `src/TdsRecon.jsx` | Added `pipelineCompleteRef`, gated `onerror` so it only triggers fallback on real failures, drives status/results from the drip-feed drain instead of the post-stream fallback |
+| aitdsrecon | `backend/recon/router.py:186` | Added `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no` headers (defensive, not required for Vite dev) |
+| aibookclose | `vite.config.js` | **No change needed.** Original Vite-proxy hypothesis was wrong. |
 
-No agent or pipeline logic should need changes — those are confirmed working.
+No agent, pipeline, EventLogger, or backend SSE-generator changes — those were always healthy.

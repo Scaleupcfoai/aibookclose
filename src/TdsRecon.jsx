@@ -63,6 +63,11 @@ function TdsRecon({ onBack }) {
   const fileInputRef = useRef(null);
   const eventQueueRef = useRef([]);
   const drainTimerRef = useRef(null);
+  // Tracks whether the backend already sent pipeline_complete. EventSource
+  // fires onerror on the *normal* stream close right after the final event,
+  // and we don't want to treat that as a failure (it would clobber the
+  // drip-feed with stale /api/results data).
+  const pipelineCompleteRef = useRef(false);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -247,6 +252,7 @@ function TdsRecon({ onBack }) {
     // Clear any pending drip-feed from previous run
     eventQueueRef.current = [];
     if (drainTimerRef.current) { clearTimeout(drainTimerRef.current); drainTimerRef.current = null; }
+    pipelineCompleteRef.current = false;
     addAssistantMsg('Starting reconciliation pipeline. Running 4 agents: Parser \u2192 Matcher \u2192 TDS Checker \u2192 Reporter...');
 
     // If user uploaded files, upload them first
@@ -275,8 +281,11 @@ function TdsRecon({ onBack }) {
           if (event.type === 'keepalive') return;
 
           if (event.type === 'pipeline_complete') {
+            pipelineCompleteRef.current = true;
             evtSource.close();
-            // Queue the final event so it drains after all agent events
+            // Queue the final event so it drains after all agent events.
+            // The drain handler sets results + status='done' AFTER the
+            // queue empties, so events render progressively.
             enqueueEvent({ ...event, _pipelineComplete: true });
             return;
           }
@@ -290,11 +299,20 @@ function TdsRecon({ onBack }) {
 
       evtSource.onerror = () => {
         evtSource.close();
-        // If we haven't received pipeline_complete, fetch results
+        // Normal close right after pipeline_complete — let the drain loop
+        // handle results + status. Bailing out here is critical: otherwise
+        // we'd overwrite the live SSE results with whatever stale JSON is
+        // sitting in /api/results from a previous run.
+        if (pipelineCompleteRef.current) return;
+
+        // Real failure (backend died, network dropped mid-stream). Fall
+        // back to cached results so the user sees something, but flag it
+        // as an error rather than 'done' so the run isn't mistaken for a
+        // successful one.
         fetch(`${API}/api/results`).then(r => r.json()).then(data => {
           setResults(data);
           setRunCount(prev => prev + 1);
-          setStatus('done');
+          setStatus('error');
         }).catch(() => setStatus('error'));
       };
     } catch (err) {
