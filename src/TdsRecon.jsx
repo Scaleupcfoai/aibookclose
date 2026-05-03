@@ -106,6 +106,17 @@ function TdsRecon({ onBack }) {
         // Final event — set results and status
         setResults(item.results || null);
         setRunCount(prev => prev + 1);
+        const pipelineError = item.result?.error;
+        if (pipelineError) {
+          setStatus('error');
+          setChatMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `Pipeline failed: ${pipelineError}\n\nPlease check your uploaded files and try again.`,
+            actions: ['Upload Files', 'Run Reconciliation'],
+          }]);
+          drainTimerRef.current = null;
+          return;
+        }
         setStatus('done');
         const s = item.results?.reconciliation_summary;
         if (s) {
@@ -276,8 +287,14 @@ function TdsRecon({ onBack }) {
 
           if (event.type === 'pipeline_complete') {
             evtSource.close();
-            // Queue the final event so it drains after all agent events
             enqueueEvent({ ...event, _pipelineComplete: true });
+            return;
+          }
+
+          if (event.type === 'error' && event.agent === 'Pipeline') {
+            evtSource.close();
+            enqueueEvent(event);
+            enqueueEvent({ _pipelineComplete: true, results: null });
             return;
           }
 
