@@ -16,4 +16,7 @@ COPY nginx.conf /etc/nginx/templates/default.conf.template
 EXPOSE 80
 
 ENV PORT=80
-ENV BACKEND_URL=http://backend:8000
+ENV BACKEND_URL=https://aitdsrecon-production-9fb5.up.railway.app
+ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d
+ENV NGINX_ENVSUBST_TEMPLATE_SUFFIX=.template
+ENV NGINX_ENVSUBST_FILTER=^(PORT|BACKEND_URL)$
